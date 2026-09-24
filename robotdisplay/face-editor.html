@@ -42,8 +42,11 @@
       margin: 0 auto;
       padding: 20px 16px 40px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 3fr 1fr;
       gap: 16px;
+    }
+    @media (max-width: 800px) {
+      .page-body { grid-template-columns: 1fr; }
     }
     .full-width { grid-column: 1 / -1; }
 
