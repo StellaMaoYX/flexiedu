@@ -352,16 +352,6 @@ function saveFace(silent) {
   }).catch(function(err) { isDirty = true; if (!silent) alert('Could not save: ' + err.message); });
 }
 
-function pushToDisplay() {
-  if (!newParameters) { alert('Select or create a face first.'); return; }
-  firebase.database().ref('robots/' + currentRobot + '/flexi/customFace/').set(newParameters)
-    .then(function() {
-      var btn = document.querySelector('button[onclick="pushToDisplay()"]');
-      if (btn) { btn.textContent = '✅ Pushed!'; setTimeout(function(){ btn.textContent = '🚀 Push to Display'; }, 1500); }
-    })
-    .catch(function(err) { alert('Could not push: ' + err.message); });
-}
-
 var DEFAULT_FACE_PARAMS = {
   name: 'New Face',
   eyeCenterDistPercent:  { type:'number',  name:'Eye spacing',          current:22,  min:0,   max:50,  nIncrements:20 },

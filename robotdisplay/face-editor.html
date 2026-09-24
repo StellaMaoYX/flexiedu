@@ -147,11 +147,17 @@
     .btn-push:hover { background: #128a3e; }
 
     /* ── Face preview ── */
+    /* The preview is no longer shown -- sentence-face is the live view now.
+       It must stay in the DOM at a real size (not display:none) because
+       face.js draws into it and saveFace() snapshots it for the thumbnail. */
     #robotFace {
-      width: 100%;
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      width: 480px;
       background: #1a56a0;
-      border-radius: 10px;
       overflow: hidden;
+      pointer-events: none;
     }
     #robotFace svg { width: 100%; display: block; }
 
@@ -273,16 +279,16 @@
       </div>
     </div>
 
-    <!-- Preview -->
+    <!-- Name & save -->
     <div class="card" style="align-self:start;">
-      <div class="card-head">👁 Preview</div>
+      <div class="card-head">💾 Save Face</div>
       <div class="card-body">
-        <div id="robotFace">
+        <div id="robotFace" aria-hidden="true">
           <svg id="faceSVG"></svg>
         </div>
-        <input type="text" id="faceName" placeholder="Face name…">
+        <input type="text" id="faceName" placeholder="Face name…" style="margin-top:0;">
         <button class="action-btn btn-primary" onclick="saveFace()" style="width:100%;margin-top:10px;">💾 Save</button>
-        <button class="action-btn btn-push" onclick="pushToDisplay()" style="width:100%;margin-top:10px;">🚀 Push to Display</button>
+        <p style="font-size:0.8rem;color:#888;margin:10px 0 0;">Changes show on the display live and auto-save every 30s.</p>
       </div>
     </div>
 
