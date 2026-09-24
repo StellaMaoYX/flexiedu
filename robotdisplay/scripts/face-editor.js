@@ -147,6 +147,7 @@ function selectedFaceChanged(target, index) {
   Eyes.isLookingAround = true;
   Face.updateParameters(newParameters);
   updateFaceEditor();
+  livePush();
 }
 
 function updateFace() {
@@ -241,7 +242,7 @@ function createRangeInput(id, name, current, min, max, nIncrements) {
     '<div class="sliderName">' + name + '</div>' +
     '<div class="sliderValue" id="' + id + 'Value">' + current + '</div>' +
     '<div class="min-value"><input class="min" type="text" name="' + id + '" onblur="newParameterValue(this,\'min\')" value="' + min + '"></div>' +
-    '<input type="range" class="slider" min="' + min + '" max="' + max + '" step="' + ((max - min) / nIncrements) + '" onchange="newParameterValue(this,\'current\')" id="' + id + 'Scale" name="' + id + '" value="' + current + '">' +
+    '<input type="range" class="slider" min="' + min + '" max="' + max + '" step="' + ((max - min) / nIncrements) + '" oninput="liveSliderInput(this)" onchange="newParameterValue(this,\'current\')" id="' + id + 'Scale" name="' + id + '" value="' + current + '">' +
     '<div class="max-value"><input class="max" type="text" name="' + id + '" onblur="newParameterValue(this,\'max\')" value="' + max + '"></div>';
   return scale;
 }
@@ -270,10 +271,46 @@ function newParameterValue(target, param) {
     .catch(function(err) { alert('Could not save: ' + err.message); });
   hasNewParams = true;
   Face.updateParameters(newParameters);
+  isDirty = true;
+  livePush();
 }
 
-function saveFace() {
+// While a slider is being dragged, mirror it into the preview and the
+// display right away (onchange only fires on release).
+function liveSliderInput(target) {
   if (selectedFace === null || !newParameters) return;
+  var p = newParameters[target.name];
+  if (!p) return;
+  p.current = Number(target.value);
+  var valDiv = document.getElementById(target.name + 'Value');
+  if (valDiv) valDiv.innerHTML = target.value;
+  Face.updateParameters(newParameters);
+  isDirty = true;
+  livePush();
+}
+
+// Throttled silent push to /flexi/customFace so sentence-face updates live.
+var livePushTimer = null;
+function livePush() {
+  if (livePushTimer || !newParameters) return;
+  livePushTimer = setTimeout(function() {
+    livePushTimer = null;
+    if (!newParameters) return;
+    firebase.database().ref('robots/' + currentRobot + '/flexi/customFace/').set(newParameters)
+      .catch(function(err) { console.warn('Live push failed:', err); });
+  }, 150);
+}
+
+// Auto-save every 30s if anything changed since the last save.
+var isDirty = false;
+setInterval(function() {
+  if (isDirty) saveFace(true);
+}, 30000);
+window.addEventListener('beforeunload', function() { if (isDirty) saveFace(true); });
+
+function saveFace(silent) {
+  if (selectedFace === null || !newParameters) return;
+  silent = silent === true; // onclick passes an Event
   var name = document.getElementById('faceName').value;
   newParameters.name = name;
 
@@ -304,11 +341,15 @@ function saveFace() {
   }
 
   var ref = firebase.database().ref('robots/' + currentRobot + '/faces/' + selectedFace + '/');
+  isDirty = false;
   ref.set(newParameters).then(function() {
     if (thumbSVG) ref.update({ thumbSVG: thumbSVG });
     var btn = document.querySelector('button[onclick="saveFace()"]');
-    if (btn) { btn.textContent = '✅ Saved!'; setTimeout(function(){ btn.textContent = '💾 Save'; }, 1500); }
-  }).catch(function(err) { alert('Could not save: ' + err.message); });
+    if (btn) {
+      btn.textContent = silent ? '✅ Auto-saved' : '✅ Saved!';
+      setTimeout(function(){ btn.textContent = '💾 Save'; }, 1500);
+    }
+  }).catch(function(err) { isDirty = true; if (!silent) alert('Could not save: ' + err.message); });
 }
 
 function pushToDisplay() {
@@ -365,6 +406,7 @@ function createNewFace() {
       Face.updateParameters(base);
       updateFaceEditor();
       document.getElementById('faceName').value = 'New Face';
+      livePush();
     }).catch(function(err) { alert('Could not create face: ' + err.message); });
 }
 
@@ -372,3 +414,8 @@ var newParameters = null;
 var currentUserData = null;
 var selectedFace = null;
 var hasNewParams = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+  var nameInput = document.getElementById('faceName');
+  if (nameInput) nameInput.addEventListener('input', function() { isDirty = true; });
+});
