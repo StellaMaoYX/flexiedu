@@ -32,10 +32,12 @@ function waitForAuth() {
           isAdmin = snap.val() === true;
           console.log('[DEBUG] uid=' + user.uid + ' snap=' + snap.val() + ' isAdmin=' + isAdmin + ' currentRobot=' + currentRobot);
           loadRobots();
+          updateNavLinks();
           if (typeof onAuthReady === 'function') onAuthReady();
         }).catch(function() {
           isAdmin = false;
           loadRobots();
+          updateNavLinks();
           if (typeof onAuthReady === 'function') onAuthReady();
         });
       }
@@ -95,6 +97,15 @@ function selectRobot(robotId) {
   currentRobot = robotId;
   document.getElementById('selectedRobot').innerHTML = robotNames[currentRobot];
   if (typeof onRobotSelected === 'function') onRobotSelected();
+}
+
+// Carry the robotId/admin context forward into the My Materials link —
+// without this it's a bare href="index.html" and a non-admin teacher's
+// robotId gets silently dropped the moment they click through.
+function updateNavLinks() {
+  var link = document.getElementById('materialsLink');
+  if (!link) return;
+  link.href = isAdmin ? 'index.html?role=admin' : 'index.html?robotId=' + currentRobot;
 }
 
 function signInWithGoogle() { Database.signInWithGoogle(); }

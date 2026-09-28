@@ -59,9 +59,11 @@ function initLibrary() {
   firebase.database().ref('/adminUids/' + currentUid).once('value').then(function(snap) {
     isAdmin = snap.val() === true;
     loadRobots();
+    updateNavLinks();
   }).catch(function() {
     isAdmin = false;
     loadRobots();
+    updateNavLinks();
   });
 
   firebase.database().ref('/users/' + currentUid + '/library').on('value', function(snapshot) {
@@ -69,6 +71,15 @@ function initLibrary() {
     libraryLoaded = true;
     render();
   });
+}
+
+// Carry the robotId/admin context forward into the Tools link — without
+// this it's a bare href="tools.html" and a non-admin teacher's robotId gets
+// silently dropped the moment they click through, falling back to robot 0.
+function updateNavLinks() {
+  var link = document.getElementById('toolsLink');
+  if (!link) return;
+  link.href = isAdmin ? 'tools.html?role=admin' : 'tools.html?robotId=' + currentRobot;
 }
 
 // ── Robot selector (which robot a material gets opened against) ────────────

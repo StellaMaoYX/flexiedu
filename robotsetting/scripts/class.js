@@ -931,6 +931,11 @@ function showPushStatus(msg, type) {
 function initClass() {
   currentRobotId = Number(new URLSearchParams(window.location.search).get('robot') || 0);
 
+  // Carry the robotId forward into the "My Classes" link — a bare
+  // href="index.html" would silently drop it and land back on robot 0.
+  const materialsLink = document.getElementById('materialsLink');
+  if (materialsLink) materialsLink.href = 'index.html?robotId=' + currentRobotId;
+
   try {
     robot = new Robot(currentRobotId);
     Robot.initialize();
