@@ -45,11 +45,6 @@ function setBellyMode(mode) {
     .catch(function(err) { alert('Could not set belly mode: ' + err.message); });
 }
 
-function openFaceEditor() {
-  setBellyMode('face');
-  // face-editor.html lives under robotdisplay/, not robotsetting/ (this page).
-  window.open('../robotdisplay/face-editor.html?robot=' + currentRobot, '_blank');
-}
 
 // ── Class / task picker ─────────────────────────────────────────────────
 function loadClassesForPicker() {
