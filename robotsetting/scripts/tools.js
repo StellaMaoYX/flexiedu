@@ -47,7 +47,8 @@ function setBellyMode(mode) {
 
 function openFaceEditor() {
   setBellyMode('face');
-  window.open('face-editor.html?robot=' + currentRobot, '_blank');
+  // face-editor.html lives under robotdisplay/, not robotsetting/ (this page).
+  window.open('../robotdisplay/face-editor.html?robot=' + currentRobot, '_blank');
 }
 
 // ── Class / task picker ─────────────────────────────────────────────────
