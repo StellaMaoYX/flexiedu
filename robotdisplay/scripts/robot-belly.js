@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * Robot Belly — thin shell that shows either the face display or the lesson
+ * Robot Belly — thin shell that shows either the Face Editor (so the belly's
+ * touchscreen itself can be used to edit the robot's face) or the lesson
  * activity screen inside a full-screen iframe, switched by the teacher from
  * Robot Tools via /robots/{id}/flexi/bellyMode ('face' | 'activity').
  * Defaults to 'face' when unset.
@@ -17,7 +18,7 @@ function initBelly() {
       const mode = snapshot.val() === 'activity' ? 'activity' : 'face';
       if (mode === currentBellyMode) return;
       currentBellyMode = mode;
-      const page = mode === 'activity' ? 'sentence-student.html' : 'sentence-face.html';
+      const page = mode === 'activity' ? 'sentence-student.html' : 'face-editor.html';
       document.getElementById('bellyFrame').src = `${page}?robot=${currentRobotId}`;
     });
 }
