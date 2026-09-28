@@ -1,6 +1,17 @@
 var robots = null;
 var admins = null;
 
+// Firebase RTDB keys can't contain '.', so /administrators/ is keyed by this
+// encoding (every '.' swapped for ',') instead of storing emails as list
+// values — that's what lets the security rules check "is this email an
+// admin" with a single key lookup instead of scanning a list.
+function encodeAdminEmailKey(email) {
+  return email.trim().toLowerCase().replace(/\./g, ',');
+}
+function decodeAdminEmailKey(key) {
+  return key.replace(/,/g, '.');
+}
+
 // Initialize Firebase directly
 firebase.initializeApp({
   apiKey: "AIzaSyB10dHhQqD1TMXTJfQNLmFkrJtVyQ4JTuA",
@@ -51,12 +62,10 @@ function onSignedIn(user) {
   setLaunchButtonsEnabled(true);
   var email = user.email.toLowerCase();
 
-  // Check admin first
-  firebase.database().ref('/administrators/').once('value').then(function(snapshot) {
-    var data = snapshot.val();
-    var adminList = data ? Object.values(data).map(function(e) { return e.toLowerCase(); }) : [];
-
-    if (adminList.includes(email)) {
+  // Check admin first — a single-key existence check against the encoded
+  // email (see encodeAdminEmailKey above).
+  firebase.database().ref('/administrators/' + encodeAdminEmailKey(email)).once('value').then(function(snapshot) {
+    if (snapshot.exists()) {
       showAdminView(user);
     } else {
       checkTeacherRole(email);
@@ -326,7 +335,7 @@ function loadAdminList() {
 
     var html = '';
     Object.keys(admins).forEach(function(key) {
-      html += '<div class="admin-list-item"><span>' + admins[key] + '</span>'
+      html += '<div class="admin-list-item"><span>' + decodeAdminEmailKey(key) + '</span>'
         + '<button class="btn-sm-del" onclick="deleteAdmin(\'' + key + '\')">✕</button></div>';
     });
     container.innerHTML = html;
@@ -340,15 +349,12 @@ function addNewAdmin() {
     return;
   }
 
-  var newIndex = admins ? Number(Object.keys(admins).pop()) + 1 : 0;
-  var updates = {};
-  updates[newIndex] = email;
-  firebase.database().ref('/administrators/').update(updates).then(function() {
+  firebase.database().ref('/administrators/' + encodeAdminEmailKey(email)).set(true).then(function() {
     document.getElementById('adminEmail').value = '';
   }).catch(function(err) { alert('Error: ' + err.message); });
 }
 
 function deleteAdmin(key) {
-  if (!confirm('Remove admin ' + admins[key] + '?')) return;
+  if (!confirm('Remove admin ' + decodeAdminEmailKey(key) + '?')) return;
   firebase.database().ref('/administrators/' + key).remove();
 }

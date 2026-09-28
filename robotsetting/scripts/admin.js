@@ -2,7 +2,16 @@ var config = new Config();
 var db = new Database(config.config, initializeControl);
 var robots = null;
 var admins = null;
-var is
+
+// Keep in sync with encodeAdminEmailKey/decodeAdminEmailKey in ../scripts/index.js —
+// /administrators/ is keyed by this encoding (every '.' swapped for ',')
+// rather than storing emails as list values.
+function encodeAdminEmailKey(email) {
+  return email.trim().toLowerCase().replace(/\./g, ',');
+}
+function decodeAdminEmailKey(key) {
+  return key.replace(/,/g, '.');
+}
 
 function initializeControl() {
   /* Register database callbacks */
@@ -15,34 +24,35 @@ function initializeControl() {
 }
 
 function updateAdmins(snapshot) {
-  admins = snapshot.val();
+  admins = snapshot.val() || {};
+  var adminKeys = Object.keys(admins);
 
-  let nAdmins = admins.length;
   let adminDiv = document.getElementById("adminInfo");
   adminDiv.innerHTML = "";
   let text = document.createElement('p');
   text.setAttribute('class', 'text-info');
-  text.innerHTML = "There are currently " + nAdmins + " administrators.";
+  text.innerHTML = "There are currently " + adminKeys.length + " administrators.";
   adminDiv.appendChild(text);
   let ul = document.createElement('ul');
   ul.setAttribute('class', 'list-group');
-  for (let i=0; i<nAdmins; i++) {
+  adminKeys.forEach(function(key) {
     let li = document.createElement('li');
     li.setAttribute('class', 'list-group-item');
-    li.innerHTML = admins[i];
+    li.innerHTML = decodeAdminEmailKey(key);
     ul.appendChild(li);
-  }
+  });
   adminDiv.appendChild(ul);
 
   let newRobotDiv = document.getElementById("newRobot");
-  if (Database.userEmail == null){
+  var myEmail = Database.userEmail ? Database.userEmail.trim().toLowerCase() : null;
+  if (myEmail == null){
     let text = document.createElement('p');
     text.setAttribute('class', 'text-danger');
     text.innerHTML = "You are not logged in with Google."
     newRobotDiv.innerHTML = "";
     newRobotDiv.appendChild(text);
   }
-  else if (admins.includes(Database.userEmail) == false) {
+  else if (!admins[encodeAdminEmailKey(myEmail)]) {
     let text = document.createElement('p');
     text.setAttribute('class', 'text-danger');
     text.innerHTML = "You do not have admin access."
@@ -130,15 +140,10 @@ function deleteRobot(index) {
 }
 
 function addNewAdmin() {
-  if (admins != null) {
-    let nAdmins = admins.length;
-    let newAdminIndex = Number(Object.keys(admins)[nAdmins-1]) + 1;
-    let adminEmail = document.getElementById('adminEmail').value;
-    let dbRef = firebase.database().ref("/administrators/");
-    let updates = {};
-    updates[newAdminIndex] = adminEmail;
-     dbRef.update(updates);
-  }
+  var adminEmail = document.getElementById('adminEmail').value.trim().toLowerCase();
+  if (!adminEmail) return;
+  firebase.database().ref('/administrators/' + encodeAdminEmailKey(adminEmail)).set(true)
+    .catch(function(err) { alert('Error: ' + err.message); });
 }
 
 function saveIdEmail() {

@@ -16,9 +16,16 @@
 var config = new Config();
 var db = new Database(config.config, null);
 
+// Read the robotId the homepage assigned this teacher (via idEmails), same
+// as scripts/index.js and robotdisplay/scripts/index.js do — without this,
+// every non-admin teacher fell through to the robot-0 default regardless of
+// what they were actually assigned.
+var urlParams = new URLSearchParams(window.location.search);
+var isAdmin = urlParams.get('role') === 'admin';
+var lockedRobotId = urlParams.get('robotId') !== null ? parseInt(urlParams.get('robotId')) : (isAdmin ? null : 0);
+
 var currentUid = null;
-var isAdmin = false;
-var currentRobot = 0;
+var currentRobot = lockedRobotId !== null ? lockedRobotId : 0;
 var robotNames = [];
 
 var nodes = {};
