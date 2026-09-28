@@ -6,6 +6,7 @@ var lockedRobotId = urlParams.get('robotId') !== null ? parseInt(urlParams.get('
 var config = new Config();
 var db = new Database(config.config, null);
 var currentRobot = lockedRobotId !== null ? lockedRobotId : 0;
+var currentUid = null;
 var robotNames = [];
 var robotsLoaded = false;
 
@@ -25,14 +26,17 @@ function waitForAuth() {
       }
       if (!robotsLoaded) {
         robotsLoaded = true;
+        currentUid = user.uid;
         // Verify admin status from Firebase instead of trusting URL param alone
         firebase.database().ref('/adminUids/' + user.uid).once('value').then(function(snap) {
           isAdmin = snap.val() === true;
           console.log('[DEBUG] uid=' + user.uid + ' snap=' + snap.val() + ' isAdmin=' + isAdmin + ' currentRobot=' + currentRobot);
           loadRobots();
+          if (typeof onAuthReady === 'function') onAuthReady();
         }).catch(function() {
           isAdmin = false;
           loadRobots();
+          if (typeof onAuthReady === 'function') onAuthReady();
         });
       }
     });
@@ -90,6 +94,7 @@ function selectRobot(robotId) {
   if (!isAdmin) return;
   currentRobot = robotId;
   document.getElementById('selectedRobot').innerHTML = robotNames[currentRobot];
+  if (typeof onRobotSelected === 'function') onRobotSelected();
 }
 
 function signInWithGoogle() { Database.signInWithGoogle(); }

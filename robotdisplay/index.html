@@ -260,7 +260,7 @@
   <div class="page-wrapper">
     <div class="hero">
       <h1>Robot Display</h1>
-      <p>Student-facing screens — face, belly, and lesson activities</p>
+      <p>Student-facing screens — set up this device as the robot's face or belly</p>
     </div>
 
     <!-- Robot selector -->
@@ -277,66 +277,30 @@
       </div>
     </div>
 
-    <!-- 2×2 card grid -->
+    <!-- 2-card grid -->
     <div class="cards-grid">
 
-      <!-- Robot Face Rendering -->
+      <!-- Robot Face -->
       <div class="flexi-card">
         <div class="card-header-block">
           <div class="badge-tag badge-display">Display</div>
-          <h2>Robot Face Rendering</h2>
+          <h2>Robot Face</h2>
         </div>
         <div class="card-body-block">
-          <p>Select a robot above and press the button to set up your tablet screen as the robot's face.</p>
-          <button class="btn-launch btn-display" onclick="startPageWithRobot('face')" id="renderButton">Start Face Renderer</button>
+          <p>Select a robot above and press the button to set up this device as the robot's face. Reacts to lesson results and the teacher's face edits in real time.</p>
+          <button class="btn-launch btn-display" onclick="startPageWithRobot('sentence-face')" id="renderButton">Start Robot Face</button>
         </div>
       </div>
 
-      <!-- Robot Belly Rendering -->
+      <!-- Robot Belly -->
       <div class="flexi-card">
         <div class="card-header-block">
-          <div class="badge-tag badge-display">Display</div>
-          <h2>Robot Belly Rendering</h2>
+          <div class="badge-tag badge-activity">Display</div>
+          <h2>Robot Belly</h2>
         </div>
         <div class="card-body-block">
-          <p>Select a robot above and press the button to set up your screen as the robot's belly.</p>
-          <button class="btn-launch btn-display" onclick="startPageWithRobot('belly')" id="bellyButton">Start Belly Renderer</button>
-        </div>
-      </div>
-
-      <!-- Sentence Ordering Activity -->
-      <div class="flexi-card">
-        <div class="card-header-block">
-          <div class="badge-tag badge-activity">Activity</div>
-          <h2>Sentence Ordering Activity</h2>
-        </div>
-        <div class="card-body-block">
-          <p>Open the sentence ordering activity screen on this device. The teacher pushes content from the Frontend Tools page.</p>
-          <button class="btn-launch btn-activity" onclick="startPageWithRobot('sentence-student')" id="flexiStudentButton">Start Sentence Ordering Activity</button>
-        </div>
-      </div>
-
-      <!-- Sentence Ordering – Robot Face -->
-      <div class="flexi-card">
-        <div class="card-header-block">
-          <div class="badge-tag badge-activity">Activity</div>
-          <h2>Sentence Ordering – Robot Face</h2>
-        </div>
-        <div class="card-body-block">
-          <p>Display the robot face for the sentence ordering activity. Reacts to student results in real time.</p>
-          <button class="btn-launch btn-activity" onclick="startPageWithRobot('sentence-face')">Start Robot Face</button>
-        </div>
-      </div>
-
-      <!-- Face Editing -->
-      <div class="flexi-card">
-        <div class="card-header-block">
-          <div class="badge-tag badge-edit">Editing</div>
-          <h2>Face Editing</h2>
-        </div>
-        <div class="card-body-block">
-          <p>Select a robot above and press the button to customize your robot's face or create new faces.</p>
-          <button class="btn-launch btn-edit" type="button" onclick="startPageWithRobot('face-editor')" id="editButton">Start Face Editor</button>
+          <p>Select a robot above and press the button to set up this device as the robot's belly. The teacher controls what it shows — face editing or a pushed lesson activity — from Robot Tools.</p>
+          <button class="btn-launch btn-activity" onclick="startPageWithRobot('robot-belly')" id="bellyButton">Start Robot Belly</button>
         </div>
       </div>
 

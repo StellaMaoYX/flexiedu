@@ -912,6 +912,7 @@ function pushToStudent() {
     firebase.database()
       .ref(`/robots/${currentRobotId}/flexi/pushed`)
       .set(Object.assign({}, activity, { _pushedAt: Date.now() }))
+      .then(() => firebase.database().ref(`/robots/${currentRobotId}/flexi/bellyMode`).set('activity'))
       .then(() => { showPushStatus('✓ Pushed to student screen!', 'ok'); startWaitingMotion(); showAnsweringState(); })
       .catch(e => showPushStatus('Firebase error: ' + e.message, 'error'));
   } catch (e) {
@@ -967,7 +968,7 @@ function initClass() {
   }
 
   const base = window.location.href.replace(/\/robotsetting\/.*$/, '');
-  const studentUrl = `${base}/robotdisplay/sentence-student.html?robot=${currentRobotId}`;
+  const studentUrl = `${base}/robotdisplay/robot-belly.html?robot=${currentRobotId}`;
   const linkEl = document.getElementById('studentLink');
   linkEl.href        = studentUrl;
   linkEl.textContent = studentUrl;

@@ -121,7 +121,7 @@
     /* Cards grid — 3 columns */
     .cards-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 24px;
     }
 
@@ -243,6 +243,30 @@
       text-align: center;
     }
 
+    /* Belly control panel */
+    .field-label {
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #555;
+      display: block;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .field-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 2px solid #dde;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      margin-bottom: 14px;
+      background: white;
+    }
+    .field-input:focus { border-color: #1a56a0; outline: none; }
+    .btn-launch.mode-active { outline: 3px solid #1a56a0; outline-offset: 2px; }
+    .hint-note { font-size: 0.85rem; color: #6b7280; min-height: 18px; }
+
     @media (max-width: 900px) {
       .cards-grid { grid-template-columns: repeat(2, 1fr); }
     }
@@ -263,7 +287,7 @@
   <div class="page-wrapper">
     <div class="hero">
       <h1>Robot Tools</h1>
-      <p>Control, configure, and manage your classroom robot</p>
+      <p>Control what your robot's belly screen is showing</p>
     </div>
 
     <!-- Robot selector -->
@@ -280,42 +304,41 @@
       </div>
     </div>
 
-    <!-- 3-column grid -->
+    <!-- 2-column grid -->
     <div class="cards-grid">
 
-      <!-- Robot Control (WoZ) -->
+      <!-- Belly mode -->
       <div class="flexi-card">
         <div class="card-header-block">
-          <div class="badge-tag badge-control">Control</div>
-          <h2>Robot Control (WoZ)</h2>
+          <div class="badge-tag badge-control">Belly Screen</div>
+          <h2>Belly Mode</h2>
         </div>
         <div class="card-body-block">
-          <p>Select a robot above and press the button to start controlling the robot's actions (Wizard of Oz) from your browser.</p>
-          <button class="btn-launch btn-control" onclick="startController()" id="controlButton">Start Robot Controller</button>
+          <p>Belly is currently showing: <strong id="currentModeLabel">…</strong></p>
+          <button class="btn-launch btn-edit" type="button" onclick="openFaceEditor()">🎨 Open Face Editor</button>
+          <button class="btn-launch btn-control" type="button" onclick="setBellyMode('face')" id="modeFaceBtn">🎭 Set Belly to Face Editing</button>
+          <button class="btn-launch btn-control" type="button" onclick="setBellyMode('activity')" id="modeActivityBtn">📋 Set Belly to Activity</button>
         </div>
       </div>
 
-      <!-- Belly Editor -->
+      <!-- Push a task -->
       <div class="flexi-card">
         <div class="card-header-block">
-          <div class="badge-tag badge-edit">Editing</div>
-          <h2>Belly Editor</h2>
+          <div class="badge-tag badge-activity">Push</div>
+          <h2>Push a Task to Belly</h2>
         </div>
         <div class="card-body-block">
-          <p>Press button to start the belly editor to customize your belly screen or create new screens.</p>
-          <button class="btn-launch btn-edit" type="button" onclick="startBellyEditor()">Start Belly Editor</button>
-        </div>
-      </div>
-
-      <!-- Robot Setup -->
-      <div class="flexi-card">
-        <div class="card-header-block">
-          <div class="badge-tag badge-control">Control</div>
-          <h2>Robot Setup</h2>
-        </div>
-        <div class="card-body-block">
-          <p>Select a robot above and press the button to set up its face and other parameters, before starting to control it.</p>
-          <button class="btn-launch btn-control" onclick="startSetup()" id="setupButton">Start Robot Setup</button>
+          <p>Pick a class and a task you've already set up, then push it live. This also switches the belly to Activity mode.</p>
+          <label class="field-label">Class</label>
+          <select id="pickClass" class="field-input" onchange="onPickClassChange()">
+            <option value="">Loading classes…</option>
+          </select>
+          <label class="field-label">Task</label>
+          <select id="pickTask" class="field-input">
+            <option value="">—</option>
+          </select>
+          <button class="btn-launch btn-activity" type="button" onclick="pushPickedTask()">🚀 Push to Belly</button>
+          <div id="pushPickStatus" class="hint-note"></div>
         </div>
       </div>
 
@@ -330,5 +353,6 @@
   <script src="scripts/config.js"></script>
   <script src="../databasejs/scripts/database.js"></script>
   <script src="scripts/index.js"></script>
+  <script src="scripts/tools.js"></script>
 </body>
 </html>
