@@ -989,9 +989,47 @@ function setRobotStatus(connected) {
   document.getElementById('robotBadge').textContent = connected ? '🤖 Connected' : '⚠ No robot';
 }
 
-// ── Robot Motion (unchanged from the old sentence-ordering.js) ─────────────
+// ── Robot Motion ───────────────────────────────────────────────────────────
+// Every motion is a list of keyframes positioned relative to a fixed home pose
+// (absolute targets), so the head always ends where it started instead of
+// drifting the way chained relative moveNeck() calls did once values clamped.
 let waitingMotionInterval = null;
 let motionTimeouts = [];
+let motionBusyUntil = 0;  // when the current correct/stuck motion finishes
+
+// Fallback home pose — the "Reset" pose enableMotors() writes in setup.js.
+const DEFAULT_HOME_POSE = {
+  'Left/Right Tilt': 2037,
+  'Up/Down Tilt':    2573,
+  'Neck':            1634,
+  'Rotate':          1937,
+};
+
+const WAITING_CYCLE_MS = 4000;
+
+// Offsets (from home) per keyframe: [delayMs, { motorName: offset }]
+const WAITING_DOWN = { 'Up/Down Tilt': -1100 };
+const WAITING_SWAY = [
+  [600,  { ...WAITING_DOWN, 'Left/Right Tilt':  150 }],
+  [1200, { ...WAITING_DOWN, 'Left/Right Tilt': -300 }],
+  [1800, { ...WAITING_DOWN }],
+];
+const CORRECT_KEYFRAMES = [
+  [0,    { 'Up/Down Tilt':  200 }],
+  [500,  { 'Up/Down Tilt': -200 }],
+  [1000, { 'Up/Down Tilt':  200 }],
+  [1500, { 'Up/Down Tilt': -200 }],
+  [2000, { 'Up/Down Tilt':  200 }],
+  [2500, {}],
+];
+const STUCK_KEYFRAMES = [
+  [0,    { 'Up/Down Tilt': -200 }],
+  [600,  { 'Up/Down Tilt': -200, 'Rotate': -300 }],
+  [1200, { 'Up/Down Tilt': -200, 'Rotate':  300 }],
+  [1800, { 'Up/Down Tilt': -200, 'Rotate': -300 }],
+  [2400, { 'Up/Down Tilt': -200 }],
+  [3000, {}],
+];
 
 function clearMotionTimeouts() {
   motionTimeouts.forEach(id => clearTimeout(id));
@@ -999,19 +1037,68 @@ function clearMotionTimeouts() {
 }
 
 function mot(fn, delay) {
-  motionTimeouts.push(setTimeout(fn, delay));
+  const id = setTimeout(() => {
+    motionTimeouts = motionTimeouts.filter(t => t !== id);
+    fn();
+  }, delay);
+  motionTimeouts.push(id);
 }
 
+function canMove() {
+  return robotConnected && robot && Array.isArray(Robot.currentMotorState);
+}
+
+// Home value for each motor: the robot's saved "Reset" pose if it has one,
+// otherwise DEFAULT_HOME_POSE.
+function getHomeValue(motor, index) {
+  const poses = Robot.poseState ? Object.values(Robot.poseState) : [];
+  const reset = poses.find(p => p && p.name === 'Reset' && p.motors);
+  if (reset && reset.motors[index] != null) return Number(reset.motors[index]);
+  if (DEFAULT_HOME_POSE[motor.name] != null) return DEFAULT_HOME_POSE[motor.name];
+  return Number(motor.value);
+}
+
+// Move every motor to home + offset (clamped to its min/max) in one write.
+function goToOffsets(offsets) {
+  if (!canMove()) return;
+  const newState = Robot.currentMotorState.map((motor, index) => {
+    if (!motor) return motor;
+    let value = getHomeValue(motor, index) + (offsets[motor.name] || 0);
+    if (motor.min != null) value = Math.max(Number(motor.min), value);
+    if (motor.max != null) value = Math.min(Number(motor.max), value);
+    return { ...motor, value };
+  });
+  robot.setMotors(newState);
+}
+
+function playKeyframes(keyframes) {
+  keyframes.forEach(([delay, offsets]) => mot(() => goToOffsets(offsets), delay));
+  motionBusyUntil = Date.now() + keyframes[keyframes.length - 1][0];
+}
+
+// Head down, looking at the student's work, with a gentle sway that repeats
+// until a result comes in.
 function startWaitingMotion() {
-  if (!robotConnected || !robot || !Robot.currentMotorState) return;
+  if (!canMove()) return;
   stopWaitingMotion();
   clearMotionTimeouts();
   try {
-    robot.moveNeck(0, -1100, 0, 0);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck( 150, 0, 0, 0); }, 600);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(-450, 0, 0, 0); }, 1200);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck( 300, 0, 0, 0); }, 1800);
+    goToOffsets(WAITING_DOWN);
+    playKeyframes(WAITING_SWAY);
+    waitingMotionInterval = setInterval(() => {
+      if (!canMove()) return stopWaitingMotion();
+      playKeyframes(WAITING_SWAY);
+    }, WAITING_CYCLE_MS);
   } catch (e) {}
+}
+
+// Student is answering again (retry or teacher reset): go back to waiting,
+// after letting a sad/happy motion that's still playing finish first.
+function resumeWaitingMotion() {
+  if (!canMove() || waitingMotionInterval) return;
+  const delay = Math.max(0, motionBusyUntil - Date.now());
+  if (delay > 0) mot(startWaitingMotion, delay);
+  else startWaitingMotion();
 }
 
 function stopWaitingMotion() {
@@ -1021,32 +1108,20 @@ function stopWaitingMotion() {
   }
 }
 
+// Happy (correct answer): nod a few times, then back to home.
 function playCorrectMotion() {
-  if (!robotConnected || !robot || !Robot.currentMotorState) return;
+  if (!canMove()) return;
   stopWaitingMotion();
   clearMotionTimeouts();
-  try {
-    robot.moveNeck(0,  200, 0, 0);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, -400, 0, 0); }, 500);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0,  400, 0, 0); }, 1000);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, -400, 0, 0); }, 1500);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0,  400, 0, 0); }, 2000);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, -200, 0, 0); }, 2500);
-  } catch (e) {}
+  try { playKeyframes(CORRECT_KEYFRAMES); } catch (e) {}
 }
 
+// Sad (wrong answer): head down, shake side to side, then back to home.
 function playStuckMotion() {
-  if (!robotConnected || !robot || !Robot.currentMotorState) return;
+  if (!canMove()) return;
   stopWaitingMotion();
   clearMotionTimeouts();
-  try {
-    robot.moveNeck(0, -200, 0, 0);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, 0, 0, -300); }, 600);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, 0, 0,  600); }, 1200);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, 0, 0, -600); }, 1800);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, 0, 0,  300); }, 2400);
-    mot(() => { if (Robot.currentMotorState) robot.moveNeck(0, 200, 0,   0); }, 3000);
-  } catch (e) {}
+  try { playKeyframes(STUCK_KEYFRAMES); } catch (e) {}
 }
 
 // ── Teacher Commands ───────────────────────────────────────────────────────
@@ -1055,7 +1130,10 @@ function sendCommand(type) {
     firebase.database()
       .ref(`/robots/${currentRobotId}/flexi/command`)
       .set({ type, timestamp: Date.now() });
-    if (type === 'reset' || type === 'tryAgain') showAnsweringState();
+    if (type === 'reset' || type === 'tryAgain') {
+      showAnsweringState();
+      resumeWaitingMotion();
+    }
   } catch (e) { console.warn('Command send failed:', e); }
 }
 
@@ -1070,11 +1148,19 @@ function listenForResults() {
         lastResultTs = data.timestamp;
         handleStudentResult(data.isCorrect);
       });
+    // The first snapshot is whatever status was left from before this page
+    // opened — only show it, don't move the robot for it.
+    let firstStatusSnapshot = true;
     firebase.database()
       .ref(`/robots/${currentRobotId}/flexi/studentStatus`)
       .on('value', snapshot => {
         const data = snapshot.val();
-        if (data && data.status === 'answering') showAnsweringState();
+        const isInitial = firstStatusSnapshot;
+        firstStatusSnapshot = false;
+        if (data && data.status === 'answering') {
+          showAnsweringState();
+          if (!isInitial) resumeWaitingMotion();
+        }
       });
   } catch (e) { console.warn('Result listener failed:', e); }
 }
