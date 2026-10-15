@@ -88,8 +88,11 @@ function Database(config, readyCallback) {
 
       if (!Database.isAnonymous) {
         console.log("Signed in as " + user.displayName);
-        console.log("Email: " + user.email);
-        Database.userEmail = user.email;
+        // Microsoft accounts don't always fill user.email; fall back to the
+        // email the provider reported.
+        var providerWithEmail = (user.providerData || []).find(p => p && p.email);
+        Database.userEmail = user.email || (providerWithEmail ? providerWithEmail.email : null);
+        console.log("Email: " + Database.userEmail);
 
         let signinButton = document.getElementById('googleSignInButton');
         let signinInfo = document.getElementById('googleSignInInfo');

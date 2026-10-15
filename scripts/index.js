@@ -30,18 +30,70 @@ firebase.auth().onAuthStateChanged(function(user) {
   }
 });
 
+// Which Microsoft accounts may sign in: 'organizations' = any school/work
+// account, 'common' = also personal Outlook accounts, or a district's tenant
+// ID to allow only that district. Must match "Supported account types" in the
+// Azure app registration.
+var MICROSOFT_TENANT = 'organizations';
+
 function signInWithGoogle() {
-  var provider = new firebase.auth.GoogleAuthProvider();
+  signInWithProvider(new firebase.auth.GoogleAuthProvider());
+}
+
+function signInWithMicrosoft() {
+  var provider = new firebase.auth.OAuthProvider('microsoft.com');
+  provider.setCustomParameters({ prompt: 'select_account', tenant: MICROSOFT_TENANT });
+  signInWithProvider(provider);
+}
+
+function signInWithProvider(provider) {
   firebase.auth().signInWithPopup(provider).then(function(result) {
     if (result && result.user) {
       onSignedIn(result.user);
     }
   }).catch(function(error) {
-    if (error.code !== 'auth/cancelled-popup-request' &&
-        error.code !== 'auth/popup-closed-by-user') {
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      linkToExistingAccount(error);
+    } else if (error.code === 'auth/operation-not-allowed') {
+      alert('This sign-in option is not set up yet. Please use another option or contact your administrator.');
+    } else if (error.code !== 'auth/cancelled-popup-request' &&
+               error.code !== 'auth/popup-closed-by-user') {
       alert('Sign-in failed: ' + error.message);
     }
   });
+}
+
+// A teacher who already signed in with Google using the same email can't
+// create a second account with Microsoft. Sign them in with the original
+// provider once, then attach the Microsoft credential so either works later.
+function linkToExistingAccount(error) {
+  var pending = error.credential;
+  firebase.auth().fetchSignInMethodsForEmail(error.email).then(function(methods) {
+    if (methods.indexOf('google.com') === -1) {
+      alert('This email is already registered with a different sign-in method. ' +
+            'Please sign in the way you did before.');
+      return;
+    }
+    alert('This email already uses Google sign-in. Please sign in with Google once ' +
+          'to connect your Microsoft account.');
+    var google = new firebase.auth.GoogleAuthProvider();
+    google.setCustomParameters({ login_hint: error.email });
+    return firebase.auth().signInWithPopup(google).then(function(result) {
+      return result.user.linkWithCredential(pending).then(function() {
+        onSignedIn(result.user);
+      });
+    });
+  }).catch(function(err) {
+    alert('Sign-in failed: ' + err.message);
+  });
+}
+
+// Microsoft accounts don't always fill user.email; fall back to the email the
+// provider reported.
+function getUserEmail(user) {
+  if (user.email) return user.email;
+  var withEmail = (user.providerData || []).find(function(p) { return p && p.email; });
+  return withEmail ? withEmail.email : null;
 }
 
 // ── Auth state handlers ──────────────────────────────────────────────────────
@@ -50,7 +102,16 @@ function onSignedIn(user) {
   // Show user bar, hide sign-in button
   document.getElementById('loginSection').style.display = 'none';
   document.getElementById('userSection').style.display = 'flex';
-  document.getElementById('userEmailDisplay').textContent = user.email;
+  var email = getUserEmail(user);
+  if (!email) {
+    alert('Your account did not share an email address, so FLEXI cannot find your robot. ' +
+          'Please ask your administrator, or sign in with a different account.');
+    handleSignOut();
+    return;
+  }
+  email = email.toLowerCase();
+
+  document.getElementById('userEmailDisplay').textContent = email;
   var avatar = document.getElementById('userAvatar');
   if (user.photoURL) {
     avatar.src = user.photoURL;
@@ -60,7 +121,6 @@ function onSignedIn(user) {
   }
 
   setLaunchButtonsEnabled(true);
-  var email = user.email.toLowerCase();
 
   // Check admin first — a single-key existence check against the encoded
   // email (see encodeAdminEmailKey above).
