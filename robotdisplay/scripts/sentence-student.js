@@ -828,14 +828,33 @@ function onFeedbackBtn() {
 }
 
 // ── Vocabulary Audio ───────────────────────────────────────────────────────
+// Speaks one sentence at a time. Tablet browsers (iPad Safari, Android Chrome)
+// don't always stop the previous sentence when cancel() is followed at once
+// by speak(), which played two voices over each other on a new step — so
+// wait a moment after stopping, let only the latest request through, and
+// don't repeat the exact same sentence within 2 seconds.
+let speakTimer = null;
+let lastSpoken = { text: '', at: 0 };
+
 function speakText(text) {
   if (!('speechSynthesis' in window) || !text) return;
-  window.speechSynthesis.cancel();
-  const utt  = new SpeechSynthesisUtterance(text);
-  utt.lang   = 'en-US';
-  utt.rate   = 0.88;
-  utt.pitch  = 1.0;
-  window.speechSynthesis.speak(utt);
+  if (text === lastSpoken.text && Date.now() - lastSpoken.at < 2000) return;
+  lastSpoken = { text, at: Date.now() };
+
+  clearTimeout(speakTimer);
+  const say = () => {
+    const utt  = new SpeechSynthesisUtterance(text);
+    utt.lang   = 'en-US';
+    utt.rate   = 0.88;
+    utt.pitch  = 1.0;
+    window.speechSynthesis.speak(utt);
+  };
+  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+    window.speechSynthesis.cancel();
+    speakTimer = setTimeout(say, 250);
+  } else {
+    say();  // right away: iPad only allows speech started directly by a tap
+  }
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
