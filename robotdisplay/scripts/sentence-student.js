@@ -1,10 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * FLEXI Student Interface
- * Renders whatever task type was last pushed to this robot's
- * /robots/{id}/flexi/pushed — 'ordering' (drag-from-bank-to-slot),
- * 'sorting' (drag-from-bank-to-bin), or 'multiple-choice' (tap options).
- * Missing/legacy activityType is treated as 'ordering' for backward
- * compatibility with anything pushed before task types existed.
+ * Two ways content arrives:
+ *   /robots/{id}/flexi/lesson – a whole class started by the teacher. The
+ *     student works through lesson.steps on their own: tasks must be answered
+ *     correctly (retrying as often as needed), then "Next"; intro/reflection
+ *     steps just need "Next"/"Done". Progress (current, results) is written
+ *     back so the teacher's class page can follow along.
+ *   /robots/{id}/flexi/pushed – a single task pushed for a quick try; only
+ *     shown while no lesson is running.
+ * Task types: 'ordering' (drag-from-bank-to-slot), 'sorting'
+ * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Missing/legacy
+ * activityType is treated as 'ordering'. With neither, the welcome screen shows.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Shared state ─────────────────────────────────────────────────────────
@@ -12,6 +18,12 @@ let currentActivity   = null;
 let currentRobotId    = null;
 let feedbackIsCorrect = false;
 let lastCommandTs     = 0;
+
+// Lesson state
+let lesson            = null;  // /flexi/lesson while one is running or finished
+let renderedStepKey   = null;  // "<current>:<stepStartedAt>" of the step on screen
+let lastPushed        = null;  // last single pushed task, shown when no lesson
+let advancing         = false;
 
 // Ordering state
 let slots = [];   // array of N: null or item object
@@ -36,23 +48,15 @@ function initStudent() {
   firebase.database()
     .ref(`/robots/${currentRobotId}/flexi/pushed`)
     .on('value', snapshot => {
-      const data = snapshot.val();
-      if (!data) return;
-      const type = data.activityType || 'ordering';
-
-      if (type === 'multiple-choice') {
-        if (!data.options || !data.options.length) return;
-        startMultipleChoice(data);
-      } else if (type === 'sorting') {
-        const rawItems = Array.isArray(data.items) ? data.items : Object.values(data.items || {});
-        if (rawItems.length === 0) return;
-        startSorting(Object.assign({}, data, { items: rawItems }));
-      } else {
-        if (!data.items) return;
-        const rawItems = Array.isArray(data.items) ? data.items : Object.values(data.items);
-        if (rawItems.length > 0) startOrdering(Object.assign({}, data, { items: rawItems }));
-      }
+      lastPushed = snapshot.val();
+      if (lesson) return;  // a running lesson takes priority
+      if (lastPushed) renderActivity(lastPushed);
+      else showOnly('waitingScreen');
     });
+
+  firebase.database()
+    .ref(`/robots/${currentRobotId}/flexi/lesson`)
+    .on('value', snapshot => onLessonChanged(snapshot.val()));
 
   firebase.database()
     .ref(`/robots/${currentRobotId}/flexi/command`)
@@ -64,6 +68,98 @@ function initStudent() {
     });
 }
 
+// Starts the right activity for a task payload (pushed task or lesson step).
+function renderActivity(data) {
+  const type = data.activityType || 'ordering';
+  if (type === 'multiple-choice') {
+    if (!data.options || !data.options.length) return;
+    startMultipleChoice(data);
+  } else if (type === 'sorting') {
+    const rawItems = Array.isArray(data.items) ? data.items : Object.values(data.items || {});
+    if (rawItems.length === 0) return;
+    startSorting(Object.assign({}, data, { items: rawItems }));
+  } else {
+    if (!data.items) return;
+    const rawItems = Array.isArray(data.items) ? data.items : Object.values(data.items);
+    if (rawItems.length > 0) startOrdering(Object.assign({}, data, { items: rawItems }));
+  }
+}
+
+// ── Lesson ──────────────────────────────────────────────────────────────────
+function lessonRef(path) {
+  return firebase.database().ref(`/robots/${currentRobotId}/flexi/lesson` + (path ? '/' + path : ''));
+}
+
+function onLessonChanged(data) {
+  lesson = data && Array.isArray(data.steps) ? data : null;
+  advancing = false;
+
+  if (!lesson) {
+    renderedStepKey = null;
+    if (lastPushed) renderActivity(lastPushed);
+    else { currentActivity = null; showOnly('waitingScreen'); }
+    return;
+  }
+
+  // Result/attempt writes also change the lesson; only re-render on a new step.
+  const key = lesson.status + ':' + lesson.current + ':' + lesson.stepStartedAt;
+  if (key === renderedStepKey) return;
+  renderedStepKey = key;
+  hideFeedback();
+
+  if (lesson.status === 'finished' || lesson.current >= lesson.steps.length) {
+    currentActivity = null;
+    showOnly('finishedScreen');
+    speakText('Great work! You finished the lesson.');
+    return;
+  }
+
+  const step = lesson.steps[lesson.current];
+  const progress = 'Step ' + (lesson.current + 1) + ' of ' + lesson.steps.length;
+  if (step.activityType === 'intro' || step.activityType === 'reflection') {
+    currentActivity = null;
+    document.getElementById('messageProgress').textContent = progress;
+    document.getElementById('messageTitle').textContent = step.title || '';
+    document.getElementById('messageText').textContent  = step.instruction || '';
+    const img = document.getElementById('messageImage');
+    img.style.display = step.image ? '' : 'none';
+    if (step.image) img.src = step.image; else img.removeAttribute('src');
+    const isLast = lesson.current === lesson.steps.length - 1;
+    document.getElementById('messageBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
+    showOnly('messageScreen');
+    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
+    speakText([title, step.instruction].filter(Boolean).join(' '));
+  } else {
+    renderActivity(step);
+    document.getElementById('activityProgress').textContent = progress;
+    speakText(step.instruction || step.title);
+  }
+}
+
+// Move to the next step, or finish after the last one.
+function advanceLesson() {
+  if (!lesson || advancing) return;
+  advancing = true;
+  const next = lesson.current + 1;
+  const updates = { current: next, stepStartedAt: Date.now() };
+  if (next >= lesson.steps.length) updates.status = 'finished';
+  lessonRef().update(updates).catch(e => { advancing = false; console.warn('Advance failed:', e); });
+}
+
+function onMessageNext() {
+  if (!lesson) return;
+  lessonRef('results/' + lesson.current).set({ done: true, completedAt: Date.now() });
+  advanceLesson();
+}
+
+// Count every check of a lesson task; mark it correct once it is.
+function recordLessonAttempt(isCorrect) {
+  if (!lesson) return;
+  const ref = lessonRef('results/' + lesson.current);
+  ref.child('attempts').transaction(n => (n || 0) + 1);
+  if (isCorrect) ref.update({ correct: true, completedAt: Date.now() });
+}
+
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -72,9 +168,18 @@ function shuffle(arr) {
   return arr;
 }
 
+// Shows one of the top-level screens and hides the rest.
+function showOnly(screenId) {
+  ['waitingScreen', 'activityScreen', 'messageScreen', 'finishedScreen'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = id !== screenId ? 'none' : (id === 'activityScreen' ? 'block' : 'flex');
+  });
+}
+
 function showScreen(activityType) {
-  document.getElementById('waitingScreen').style.display  = 'none';
-  document.getElementById('activityScreen').style.display = 'block';
+  showOnly('activityScreen');
+  document.getElementById('activityProgress').textContent = '';
   document.getElementById('orderingScreen').style.display = activityType === 'ordering'        ? 'block' : 'none';
   document.getElementById('sortingScreen').style.display  = activityType === 'sorting'          ? 'block' : 'none';
   document.getElementById('mcScreen').style.display        = activityType === 'multiple-choice' ? 'block' : 'none';
@@ -642,6 +747,7 @@ function checkAnswer() {
     firebase.database()
       .ref(`/robots/${currentRobotId}/flexi/result`)
       .set({ isCorrect, timestamp: Date.now() });
+    recordLessonAttempt(isCorrect);
   } catch (e) { console.warn('Result write failed:', e); }
 
   if (isCorrect) {
@@ -657,8 +763,13 @@ function showCorrect() {
     el.classList.remove('state-incorrect');
     el.classList.add('state-correct');
   });
+  // In a lesson the student moves on themselves; a single pushed task waits
+  // for the teacher.
+  const isLast = lesson && lesson.current === lesson.steps.length - 1;
   showFeedback('overlay-correct', '🎉', 'Amazing! You got it right!',
-    currentActivity.successPhrase || '', null, null);
+    currentActivity.successPhrase || '',
+    lesson ? (isLast ? 'Finish ✓' : 'Next ➜') : null,
+    lesson ? 'btn-continue' : null);
   speakText(currentActivity.successPhrase || 'Wonderful! You did it!');
 }
 
@@ -699,6 +810,10 @@ function hideFeedback() {
 
 function onFeedbackBtn() {
   hideFeedback();
+  if (feedbackIsCorrect && lesson) {
+    advanceLesson();
+    return;
+  }
   if (!feedbackIsCorrect) {
     const type = currentActivity.activityType || 'ordering';
     if      (type === 'sorting')          resetSorting();

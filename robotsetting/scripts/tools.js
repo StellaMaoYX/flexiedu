@@ -26,7 +26,7 @@ function subscribeBellyMode() {
   if (bellyModeRef) bellyModeRef.off();
   bellyModeRef = firebase.database().ref('/robots/' + currentRobot + '/flexi/bellyMode');
   bellyModeRef.on('value', function(snap) {
-    currentBellyMode = snap.val() === 'activity' ? 'activity' : 'face';
+    currentBellyMode = snap.val() === 'face' ? 'face' : 'activity';
     updateModeUI();
   });
 }
@@ -134,11 +134,12 @@ function pushPickedTask() {
   }
 
   var payload = buildPushPayload(task);
-  firebase.database().ref('/robots/' + currentRobot + '/flexi/pushed')
-    .set(Object.assign({}, payload, { _pushedAt: Date.now() }))
-    .then(function() {
-      return firebase.database().ref('/robots/' + currentRobot + '/flexi/bellyMode').set('activity');
-    })
+  // A single pushed task replaces any lesson that is running.
+  firebase.database().ref('/robots/' + currentRobot + '/flexi').update({
+    pushed: Object.assign({}, payload, { _pushedAt: Date.now() }),
+    lesson: null,
+    bellyMode: 'activity'
+  })
     .then(function() {
       if (statusEl) {
         statusEl.textContent = '✓ Pushed to belly!';

@@ -3,8 +3,10 @@
  * robotdisplay/scripts/pair.js). The teacher enters (or arrives via QR with)
  * the code a robot screen shows; confirming adds that device to
  * /robots/{id}/devices/{uid} until midnight and tells the device which robot
- * it now belongs to. The access check in database.js has already pinned a
- * teacher's ?robotId= to their own robot; admins pick a robot here.
+ * it now belongs to. The first connection of the day also resets the robot to
+ * its defaults (welcome screen, default face, no old lesson or results), so
+ * every class starts fresh. The access check in database.js has already
+ * pinned a teacher's ?robotId= to their own robot; admins pick a robot here.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 var CODE_LIFETIME_MS = 10 * 60 * 1000;
@@ -26,6 +28,23 @@ function endOfToday() {
   var d = new Date();
   d.setHours(24, 0, 0, 0);
   return d.getTime();
+}
+
+function startOfToday() {
+  var d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// Clears what the robot showed last time, once per day: the first screen
+// connected today resets it; later ones (e.g. a tablet re-paired mid-lesson)
+// leave today's lesson alone.
+function resetRobotIfNewDay(robotId) {
+  var flexiRef = firebase.database().ref('robots/' + robotId + '/flexi');
+  return flexiRef.child('resetAt').once('value').then(function(snap) {
+    if (snap.val() && snap.val() >= startOfToday()) return;
+    return flexiRef.set({ bellyMode: 'activity', resetAt: Date.now() });
+  });
 }
 
 function initConnect(uid) {
@@ -98,7 +117,9 @@ function connectDevice() {
       expiresAt: endOfToday()
     };
     updates['pairing/' + code + '/robot'] = String(currentRobot);
-    return db.ref().update(updates).then(function() { return request; });
+    return resetRobotIfNewDay(currentRobot)
+      .then(function() { return db.ref().update(updates); })
+      .then(function() { return request; });
   }).then(function(request) {
     setMessage(ROLE_NAMES[request.role] + ' screen connected. It will switch over in a moment.', 'ok');
     document.getElementById('codeInput').value = '';

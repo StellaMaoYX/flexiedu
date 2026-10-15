@@ -261,6 +261,18 @@
       applyState(STATE_WORKING);
     });
 
+    // Lesson moved to a new step → working; lesson finished → happy (ignore stale)
+    // (attempt counts also change the lesson, so only react to a new step)
+    let lastLessonStep = null;
+    db.ref(`/robots/${robotId}/flexi/lesson`).on('value', snap => {
+      const lesson = snap.val();
+      if (!lesson || !lesson.stepStartedAt || lesson.stepStartedAt < initTime) return;
+      const step = lesson.status + ':' + lesson.stepStartedAt;
+      if (step === lastLessonStep) return;
+      lastLessonStep = step;
+      applyState(lesson.status === 'finished' ? STATE_CORRECT : STATE_WORKING);
+    });
+
     // Teacher command reset / tryAgain → return to working (ignore stale)
     db.ref(`/robots/${robotId}/flexi/command`).on('value', snap => {
       const cmd = snap.val();

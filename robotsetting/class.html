@@ -496,7 +496,7 @@
           <label class="field-label">Task Title</label>
           <input class="field-input" type="text" id="edTitle" placeholder="e.g. Life Cycle of a Butterfly">
 
-          <label class="field-label">Instruction (students see this)</label>
+          <label class="field-label" id="edInstructionLabel">Instruction (students see this)</label>
           <input class="field-input" type="text" id="edInstruction" placeholder="e.g. Put these steps in the correct order!">
 
           <!-- ═══ Ordering body ═══ -->
@@ -567,13 +567,29 @@
             <button class="add-item-btn" onclick="addMcOption()">&#43; Add Option</button>
           </div>
 
-          <label class="field-label">Success Phrase (robot says when correct)</label>
-          <input class="field-input" type="text" id="edSuccess" placeholder="e.g. You got it right!">
+          <!-- ═══ Intro / Reflection body ═══ -->
+          <div id="messageBody" style="display:none;">
+            <label class="field-label">Picture (optional)</label>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;">
+              <input class="item-img-input" type="url" id="msgImgUrl" placeholder="Image URL (optional — or upload ▶)" style="flex:1;">
+              <label style="cursor:pointer;white-space:nowrap;padding:6px 10px;background:#1a56a0;color:white;border-radius:7px;font-size:0.8rem;flex-shrink:0;" title="Upload image from computer">
+                &#128228; Upload
+                <input type="file" accept="image/*" style="display:none" onchange="uploadMessageImage(this)">
+              </label>
+            </div>
+            <div class="item-img-preview" id="msgImgPreview" style="display:none;margin:-6px 0 12px;"></div>
+            <p class="hint-note">Students read this on the belly screen and FLEXI reads it aloud. They tap Next to continue.</p>
+          </div>
+
+          <div id="successField">
+            <label class="field-label">Success Phrase (robot says when correct)</label>
+            <input class="field-input" type="text" id="edSuccess" placeholder="e.g. You got it right!">
+          </div>
 
           <!-- Push button -->
-          <button class="push-btn" onclick="pushToStudent()">&#9654; Push to Student Screen</button>
+          <button class="push-btn" onclick="pushToStudent()">&#9654; Push Only This Task</button>
           <div class="push-status" id="pushStatus"></div>
-          <p class="hint-note">&#8505; This immediately updates what students see on their screen.</p>
+          <p class="hint-note">&#8505; Shows just this task on the robot right away, e.g. to try it out. Use Start Lesson (right) for the whole class.</p>
         </div>
         <div class="card-body" id="editorEmptyState" style="display:none;text-align:center;color:#999;">
           Add a task on the left to start editing.
@@ -583,6 +599,21 @@
 
     <!-- ═══ RIGHT: Controls & Monitor ══════════════════════════════════════ -->
     <div class="right-col">
+
+      <!-- Whole-lesson control -->
+      <div class="card">
+        <div class="card-head">&#127891; Lesson</div>
+        <div class="card-body">
+          <button class="push-btn" id="startLessonBtn" onclick="startLesson()">&#9654; Start Lesson</button>
+          <p class="hint-note" id="lessonHint">Sends every task in this class to the robot. Students work through them on their own.</p>
+          <div class="push-status" id="lessonStatus"></div>
+          <div id="lessonProgress"></div>
+          <div id="lessonControls" style="display:none;margin-top:10px;">
+            <button class="ctrl-btn" onclick="skipLessonStep()">&#9197; Skip This Step</button>
+            <button class="ctrl-btn" onclick="endLesson()">&#9209; End Lesson</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Robot + student screen link -->
       <div class="card">

@@ -25,8 +25,24 @@
       text-align: center;
       padding: 40px;
     }
-    #waitingScreen .wait-icon { font-size: 4rem; margin-bottom: 16px; }
-    #waitingScreen .wait-msg  { font-size: 1.4rem; }
+    #waitingScreen .wait-icon, .center-screen .wait-icon { font-size: 4rem; margin-bottom: 16px; }
+    #waitingScreen .wait-msg, .center-screen .wait-msg  { font-size: 1.4rem; color: #888; }
+    .wait-title { font-size: 2.2rem; font-weight: bold; color: #1a56a0; margin-bottom: 8px; }
+
+    /* ── Lesson: intro / reflection / finished ── */
+    .center-screen {
+      flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; text-align: center; padding: 32px 20px;
+    }
+    .message-card {
+      background: white; border-radius: 24px; padding: 32px 36px; max-width: 640px; width: 100%;
+      box-shadow: 0 6px 30px rgba(26,86,160,.12);
+    }
+    .message-title { font-size: 2rem; font-weight: bold; color: #222; margin-bottom: 16px; }
+    .message-image { max-width: 100%; max-height: 40vh; border-radius: 16px; margin-bottom: 16px; }
+    .message-text  { font-size: 1.5rem; line-height: 1.5; color: #333; margin-bottom: 28px; white-space: pre-wrap; }
+    .lesson-progress { font-size: 0.95rem; color: #6b7a99; font-weight: bold; margin-bottom: 10px; }
+    .lesson-progress:empty { display: none; }
 
     #activityScreen { display: none; }
 
@@ -402,13 +418,33 @@
 <body>
 
   <div id="waitingScreen">
-    <div class="wait-icon">⏳</div>
-    <div class="wait-msg">Waiting for your teacher to start the activity…</div>
+    <div class="wait-icon">🤖</div>
+    <div class="wait-title">Hi, I'm FLEXI!</div>
+    <div class="wait-msg">Waiting for your teacher…</div>
+  </div>
+
+  <!-- Lesson: intro / reflection step -->
+  <div id="messageScreen" class="center-screen" style="display:none;">
+    <div class="lesson-progress" id="messageProgress"></div>
+    <div class="message-card">
+      <div class="message-title" id="messageTitle"></div>
+      <img class="message-image" id="messageImage" alt="" style="display:none;">
+      <div class="message-text" id="messageText"></div>
+      <button class="fb-btn btn-continue" id="messageBtn" onclick="onMessageNext()">Next ➜</button>
+    </div>
+  </div>
+
+  <!-- Lesson: all steps done -->
+  <div id="finishedScreen" class="center-screen" style="display:none;">
+    <div class="wait-icon">🎉</div>
+    <div class="wait-title">Great work!</div>
+    <div class="wait-msg">You finished the lesson.</div>
   </div>
 
   <div id="activityScreen">
 
     <div class="activity-header">
+      <div class="lesson-progress" id="activityProgress"></div>
       <div class="activity-title" id="activityTitle"></div>
       <div class="activity-instruction" id="activityInstruction"></div>
       <span class="level-badge" id="levelBadge">Sentence</span>

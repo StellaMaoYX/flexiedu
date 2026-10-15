@@ -6,8 +6,14 @@
  * sidebar swaps which form is shown below, but "Push to Student" always
  * targets whichever task is currently selected.
  *
+ * "Start Lesson" sends the whole class as a lesson the student works through
+ * on their own (see robotdisplay/scripts/sentence-student.js); "Push Only
+ * This Task" sends just the selected task.
+ *
  * Firebase paths (under /robots/{robotId}/flexi/):
- *   pushed   – the task the teacher pushed (includes activityType)
+ *   lesson   – { id, title, steps[], current, status, startedAt,
+ *                stepStartedAt, results{stepIndex: {attempts, correct, done}} }
+ *   pushed   – a single task the teacher pushed (includes activityType)
  *   command  – control commands the teacher sends
  *   result   – result the student submitted
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -38,7 +44,20 @@ const TASK_TYPES = [
     icon: '✅',
     description: 'Single- or multi-select question, with optional images.',
   },
+  {
+    key: 'intro',
+    label: 'Introduction',
+    icon: '👋',
+    description: 'A welcome or explanation students read (FLEXI reads it aloud), then tap Next.',
+  },
+  {
+    key: 'reflection',
+    label: 'Reflection',
+    icon: '💭',
+    description: 'A question for students to think and talk about, then tap Done.',
+  },
 ];
+const MESSAGE_TYPES = ['intro', 'reflection'];  // no answer to check, just Next
 const TASK_TYPE_META = {};
 TASK_TYPES.forEach(t => { TASK_TYPE_META[t.key] = t; });
 
@@ -244,6 +263,10 @@ function addTaskOfType(typeKey) {
       multiSelect: false,
       options: [{ id: genId(), text: '', image: null, isCorrect: true }, { id: genId(), text: '', image: null, isCorrect: false }],
     });
+  } else if (typeKey === 'intro') {
+    task = Object.assign(base, { title: 'Welcome!', image: null, successPhrase: '' });
+  } else if (typeKey === 'reflection') {
+    task = Object.assign(base, { title: 'Think about it', instruction: 'What comes first? What comes next?', image: null, successPhrase: '' });
   } else {
     return;
   }
@@ -307,9 +330,22 @@ function loadTaskIntoEditor(i) {
   document.getElementById('edInstruction').value = task.instruction || '';
   document.getElementById('edSuccess').value     = task.successPhrase || '';
 
+  const isMessage = MESSAGE_TYPES.includes(task.taskType);
   document.getElementById('orderingBody').style.display = task.taskType === 'ordering'        ? 'block' : 'none';
   document.getElementById('sortingBody').style.display  = task.taskType === 'sorting'          ? 'block' : 'none';
   document.getElementById('mcBody').style.display        = task.taskType === 'multiple-choice' ? 'block' : 'none';
+  document.getElementById('messageBody').style.display  = isMessage ? 'block' : 'none';
+  document.getElementById('successField').style.display = isMessage ? 'none'  : 'block';
+  document.getElementById('edInstructionLabel').textContent = isMessage
+    ? 'Text (students see this, FLEXI reads it aloud)' : 'Instruction (students see this)';
+
+  if (isMessage) {
+    const img = task.image || '';
+    document.getElementById('msgImgUrl').value = img;
+    const preview = document.getElementById('msgImgPreview');
+    preview.style.display = img ? 'block' : 'none';
+    preview.innerHTML     = img ? `<img src="${esc(img)}" style="max-height:70px;border-radius:6px;border:1px solid #dde;">` : '';
+  }
 
   if (task.taskType === 'ordering') {
     languageLevel = task.level || 'sentence';
@@ -371,6 +407,9 @@ function saveCurrentTask() {
       image:      row.querySelector('.sort-item-img').value.trim() || null,
       categoryId: row.querySelector('.sort-item-cat').value || null,
     })).filter(item => item.text || item.image);
+  } else if (MESSAGE_TYPES.includes(task.taskType)) {
+    task.instruction = document.getElementById('edInstruction').value.trim() || '';
+    task.image       = document.getElementById('msgImgUrl').value.trim() || null;
   } else if (task.taskType === 'multiple-choice') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.multiSelect  = document.getElementById('mcMultiBtn').classList.contains('active');
@@ -447,7 +486,61 @@ function readTask() {
     return Object.assign(shared, { activityType: 'multiple-choice', multiSelect: isMulti, question, options });
   }
 
+  if (MESSAGE_TYPES.includes(task.taskType)) {
+    return Object.assign(shared, {
+      activityType: task.taskType,
+      image: document.getElementById('msgImgUrl').value.trim() || null,
+    });
+  }
+
   return null;
+}
+
+// Turns a saved task into what the robot shows for it (the lesson-step
+// version of readTask(), reading saved data instead of the editor form).
+function taskToStep(task) {
+  const step = {
+    title:         task.title || 'Untitled Task',
+    instruction:   task.instruction || '',
+    successPhrase: task.successPhrase || 'Great job!',
+  };
+  if (MESSAGE_TYPES.includes(task.taskType)) {
+    return Object.assign(step, { activityType: task.taskType, image: task.image || null });
+  }
+  if (task.taskType === 'sorting') {
+    return Object.assign(step, { activityType: 'sorting', categories: task.categories || [], items: task.items || [] });
+  }
+  if (task.taskType === 'multiple-choice') {
+    return Object.assign(step, {
+      activityType: 'multiple-choice', multiSelect: !!task.multiSelect,
+      question: task.question || { text: '', image: null }, options: task.options || [],
+    });
+  }
+  return Object.assign(step, {
+    activityType: 'ordering', languageLevel: task.level || 'sentence',
+    items: task.items || [], targetWord: task.targetWord || null,
+  });
+}
+
+// Why a task can't be used yet, or null if it's ready (same checks as
+// pushToStudent()).
+function taskProblem(step) {
+  const type = step.activityType;
+  if (MESSAGE_TYPES.includes(type)) return step.instruction || step.image ? null : 'needs some text or a picture';
+  if (type === 'sorting') {
+    if (step.categories.length < 2) return 'needs at least 2 categories';
+    if (step.items.length === 0) return 'needs at least one item';
+    if (step.items.some(it => !it.categoryId)) return 'every item needs a category';
+    return null;
+  }
+  if (type === 'multiple-choice') {
+    if (step.options.length < 2) return 'needs at least 2 options';
+    const correct = step.options.filter(o => o.isCorrect).length;
+    if (correct === 0) return 'mark at least one correct option';
+    if (!step.multiSelect && correct > 1) return 'single choice can only have 1 correct option';
+    return null;
+  }
+  return step.items.length ? null : 'needs at least one item';
 }
 
 // ── Shared image-upload helper ──────────────────────────────────────────────
@@ -806,6 +899,15 @@ function setMcMultiSelect(isMulti, fromLoad) {
   saveCurrentTask();
 }
 
+function uploadMessageImage(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  const urlInput = document.getElementById('msgImgUrl');
+  const preview  = document.getElementById('msgImgPreview');
+  cloudinaryUpload(file, urlInput, preview, fileInput.parentElement, () => saveCurrentTask());
+  fileInput.value = '';
+}
+
 function uploadMcQuestionImage(fileInput) {
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
@@ -819,6 +921,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlInput = document.getElementById('mcQuestionImgUrl');
   const preview  = document.getElementById('mcQuestionImgPreview');
   if (urlInput && preview) wireManualUrlPreview(urlInput, preview);
+  const msgUrl     = document.getElementById('msgImgUrl');
+  const msgPreview = document.getElementById('msgImgPreview');
+  if (msgUrl && msgPreview) wireManualUrlPreview(msgUrl, msgPreview);
 });
 
 function buildMcOptionRow(opt) {
@@ -895,6 +1000,10 @@ function pushToStudent() {
   const activity = readTask();
   if (!activity) return;
 
+  if (MESSAGE_TYPES.includes(activity.activityType)) {
+    showPushStatus('Introduction and reflection steps are shown during a lesson. Use Start Lesson.', 'error');
+    return;
+  }
   if (activity.activityType === 'ordering') {
     if (activity.items.length === 0) { showPushStatus('Please add at least one item.', 'error'); return; }
   } else if (activity.activityType === 'sorting') {
@@ -909,10 +1018,10 @@ function pushToStudent() {
   }
 
   try {
+    // A single pushed task replaces any lesson that is running.
     firebase.database()
-      .ref(`/robots/${currentRobotId}/flexi/pushed`)
-      .set(Object.assign({}, activity, { _pushedAt: Date.now() }))
-      .then(() => firebase.database().ref(`/robots/${currentRobotId}/flexi/bellyMode`).set('activity'))
+      .ref(`/robots/${currentRobotId}/flexi`)
+      .update({ pushed: Object.assign({}, activity, { _pushedAt: Date.now() }), lesson: null, bellyMode: 'activity' })
       .then(() => { showPushStatus('✓ Pushed to student screen!', 'ok'); startWaitingMotion(); showAnsweringState(); })
       .catch(e => showPushStatus('Firebase error: ' + e.message, 'error'));
   } catch (e) {
@@ -980,6 +1089,119 @@ function initClass() {
 
   loadClassFromStorage();
   listenForResults();
+  listenForLesson();
+}
+
+// ── Lesson ─────────────────────────────────────────────────────────────────
+let lesson = null;          // /flexi/lesson as last seen
+let lessonStepKey = null;   // detects a new step (attempt counts change the lesson too)
+
+function lessonRef() {
+  return firebase.database().ref(`/robots/${currentRobotId}/flexi/lesson`);
+}
+
+function currentLessonStep() {
+  if (!lesson || lesson.status !== 'running' || !Array.isArray(lesson.steps)) return null;
+  return lesson.steps[lesson.current] || null;
+}
+
+function setLessonStatus(msg, type) {
+  const el = document.getElementById('lessonStatus');
+  el.textContent = msg;
+  el.className   = 'push-status ' + (type || '');
+}
+
+function startLesson() {
+  saveCurrentTask();
+  if (!tasks.length) return setLessonStatus('Add some tasks to this class first.', 'error');
+
+  const steps = tasks.map(taskToStep);
+  for (let i = 0; i < steps.length; i++) {
+    const problem = taskProblem(steps[i]);
+    if (problem) return setLessonStatus(`Task ${i + 1} (${steps[i].title}) ${problem}.`, 'error');
+  }
+  if (lesson && lesson.status === 'running' &&
+      !confirm('A lesson is already running on this robot. Start this one from the beginning instead?')) return;
+
+  const now = Date.now();
+  firebase.database().ref(`/robots/${currentRobotId}/flexi`).update({
+    lesson: {
+      id: classId || null,
+      title: document.getElementById('topbarTitle').textContent.replace(/^🏫\s*/, '') || 'Lesson',
+      steps, current: 0, status: 'running', startedAt: now, stepStartedAt: now,
+    },
+    pushed: null,
+    result: null,
+    bellyMode: 'activity',
+  })
+    .then(() => setLessonStatus('✓ Lesson started!', 'ok'))
+    .catch(e => setLessonStatus('Could not start the lesson: ' + e.message, 'error'));
+}
+
+function skipLessonStep() {
+  if (!lesson || lesson.status !== 'running') return;
+  const next = lesson.current + 1;
+  const updates = { current: next, stepStartedAt: Date.now() };
+  if (next >= lesson.steps.length) updates.status = 'finished';
+  updates['results/' + lesson.current + '/skipped'] = true;
+  lessonRef().update(updates);
+}
+
+// Back to the welcome screen.
+function endLesson() {
+  if (!confirm('End the lesson? The robot goes back to its welcome screen.')) return;
+  firebase.database().ref(`/robots/${currentRobotId}/flexi`)
+    .update({ lesson: null, pushed: null, result: null, command: null, studentStatus: null })
+    .then(() => { setLessonStatus('Lesson ended.', 'ok'); stopWaitingMotion(); clearMotionTimeouts(); });
+}
+
+function listenForLesson() {
+  let firstSnapshot = true;
+  lessonRef().on('value', snapshot => {
+    lesson = snapshot.val();
+    renderLessonProgress();
+
+    // Robot motion when the student reaches a new step (not for the state
+    // the lesson was already in when this page opened).
+    const key = lesson ? lesson.status + ':' + lesson.stepStartedAt : null;
+    const isNewStep = key !== lessonStepKey;
+    lessonStepKey = key;
+    if (firstSnapshot) { firstSnapshot = false; return; }
+    if (!lesson || !isNewStep) return;
+    if (lesson.status === 'finished') {
+      playCorrectMotion();
+    } else {
+      const step = currentLessonStep();
+      if (step && !MESSAGE_TYPES.includes(step.activityType)) { startWaitingMotion(); showAnsweringState(); }
+      else { stopWaitingMotion(); clearMotionTimeouts(); }
+    }
+  });
+}
+
+function renderLessonProgress() {
+  const box = document.getElementById('lessonProgress');
+  const running = lesson && lesson.status === 'running';
+  document.getElementById('lessonControls').style.display = lesson ? 'block' : 'none';
+  document.getElementById('startLessonBtn').textContent = running ? '↺ Restart Lesson' : '▶ Start Lesson';
+  if (!lesson || !Array.isArray(lesson.steps)) { box.innerHTML = ''; return; }
+
+  const results = lesson.results || {};
+  const rows = lesson.steps.map((step, i) => {
+    const r = results[i] || {};
+    let status;
+    if (r.skipped)                                   status = '⏭ skipped';
+    else if (r.correct)                              status = '✅ ' + (r.attempts > 1 ? r.attempts + ' tries' : '1st try');
+    else if (r.done)                                 status = '✅ done';
+    else if (running && i === lesson.current)        status = '▶ now' + (r.attempts ? ' · ' + r.attempts + ' tries' : '');
+    else                                             status = '';
+    const meta = TASK_TYPE_META[step.activityType] || { icon: '📄' };
+    const current = running && i === lesson.current;
+    return `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eef;${current ? 'font-weight:bold;' : ''}">
+      <span>${i + 1}. ${meta.icon} ${esc(step.title)}</span><span style="white-space:nowrap;color:#555;">${status}</span></div>`;
+  });
+  const heading = lesson.status === 'finished'
+    ? '🎉 Finished!' : `Step ${Math.min(lesson.current + 1, lesson.steps.length)} of ${lesson.steps.length}`;
+  box.innerHTML = `<p class="section-title" style="margin-top:10px;">${esc(lesson.title || 'Lesson')} — ${heading}</p>` + rows.join('');
 }
 
 function setRobotStatus(connected) {
@@ -1166,7 +1388,7 @@ function listenForResults() {
 }
 
 function handleStudentResult(isCorrect) {
-  const activity = readTask();
+  const activity = currentLessonStep() || readTask();
   if (!activity) return;
 
   if (isCorrect) {
