@@ -161,6 +161,16 @@ function handleSignOut() {
 
 // ── Role views ───────────────────────────────────────────────────────────────
 
+// A teacher page that needed sign-in sent the visitor here with
+// ?next=<path>; once we know they may use FLEXI, send them back. Only
+// same-site paths are followed.
+function followNextPage() {
+  var next = new URLSearchParams(window.location.search).get('next');
+  if (next && next.charAt(0) === '/' && next.charAt(1) !== '/') {
+    window.location.replace(next);
+  }
+}
+
 function setButtonUrls(isAdmin, robotId) {
   var params = isAdmin ? '?role=admin' : '?robotId=' + robotId;
   var btnDisplay = document.getElementById('btnRobotDisplay');
@@ -177,7 +187,9 @@ function showAdminView(user) {
   panel.classList.add('visible');
   loadAdminList();
 
+  // Leave for ?next= only after adminUids is saved, or the write could be lost.
   var afterUid = function() {
+    followNextPage();
     loadIdEmailList();
     loadRobotList();
   };
@@ -202,6 +214,7 @@ function checkTeacherRole(email) {
       setRobotIdStatus('teacher', robotId);
       setButtonUrls(false, robotId);
       setLaunchButtonsEnabled(true);
+      followNextPage();
     } else {
       setRobotIdStatus('unknown');
       setLaunchButtonsEnabled(false);

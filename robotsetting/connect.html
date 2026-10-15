@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect Robot Screens – FLEXI Educational Platform</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8edf2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #111827;
+    }
+    .topbar { display: flex; justify-content: space-between; padding: 16px 24px; }
+    .btn-home {
+      display: inline-block; padding: 8px 16px; border-radius: 10px; background: #fff;
+      border: 1px solid #e5e7eb; color: #374151; text-decoration: none; font-weight: 600;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 8px 16px 40px; }
+    h1 { font-size: 1.8rem; margin: 8px 0 4px; }
+    .sub { color: #6b7280; margin: 0 0 24px; }
+    .card {
+      background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+      border: 1px solid #e8ecf0; padding: 22px; margin-bottom: 20px;
+    }
+    .card h2 { font-size: 1.15rem; margin: 0 0 14px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; color: #374151; }
+    input, select {
+      width: 100%; padding: 12px 14px; font-size: 1.2rem; border-radius: 10px;
+      border: 1.5px solid #d1d5db; margin-bottom: 14px;
+    }
+    #codeInput { letter-spacing: 0.15em; font-weight: 700; text-align: center; }
+    .btn {
+      width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 1rem;
+      font-weight: 700; color: #fff; background: #6366f1; cursor: pointer;
+    }
+    .btn:disabled { background: #c7c9f5; cursor: not-allowed; }
+    .msg { margin: 12px 0 0; font-size: 0.95rem; }
+    .msg.ok { color: #047857; } .msg.err { color: #b91c1c; }
+    .device {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-top: 1px solid #f1f5f9;
+    }
+    .device:first-child { border-top: none; }
+    .device small { color: #6b7280; display: block; }
+    .btn-sm {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid #fecaca;
+      background: #fef2f2; color: #b91c1c; font-weight: 600; cursor: pointer;
+    }
+    .empty { color: #9ca3af; }
+    #robotPicker { display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="btn-home" id="homeLink" href="index.html">&#8592; My Materials</a>
+  </div>
+
+  <div class="wrap">
+    <h1>Connect Robot Screens</h1>
+    <p class="sub">On the robot's face phone and belly tablet, open the pairing page, then enter the code it shows. Screens stay connected until midnight.</p>
+
+    <div class="card">
+      <div id="robotPicker">
+        <label for="robotSelect">Robot</label>
+        <select id="robotSelect" onchange="selectRobot(this.value)"></select>
+      </div>
+      <p id="robotLabel" style="margin:0 0 14px;font-weight:600;"></p>
+
+      <label for="codeInput">Code on the robot screen</label>
+      <input id="codeInput" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="123 456">
+      <button class="btn" id="connectBtn" onclick="connectDevice()">Connect</button>
+      <p class="msg" id="connectMsg"></p>
+    </div>
+
+    <div class="card">
+      <h2>Connected screens</h2>
+      <div id="deviceList"><span class="empty">Loading…</span></div>
+    </div>
+  </div>
+
+  <script src="scripts/config.js"></script>
+  <script src="../databasejs/scripts/database.js" data-require-access></script>
+  <script src="scripts/connect.js"></script>
+</body>
+</html>

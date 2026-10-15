@@ -163,7 +163,9 @@ function Database(config, readyCallback) {
 
   // Send signed-out and anonymous visitors back to the home page to sign in.
   Database.goHome = function() {
-    window.location.replace(new URL('../index.html', window.location.href).href);
+    var home = new URL('../', window.location.href);  // the site's home page
+    home.searchParams.set('next', window.location.pathname + window.location.search);
+    window.location.replace(home.href);
   }
 
   // Resolves true if this user may use the page. Admins may open any robot;

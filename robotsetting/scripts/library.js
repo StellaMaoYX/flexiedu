@@ -80,6 +80,8 @@ function updateNavLinks() {
   var link = document.getElementById('toolsLink');
   if (!link) return;
   link.href = isAdmin ? 'tools.html?role=admin' : 'tools.html?robotId=' + currentRobot;
+  var connect = document.getElementById('connectLink');
+  if (connect) connect.href = isAdmin ? 'connect.html?role=admin' : 'connect.html?robotId=' + currentRobot;
 }
 
 // ── Robot selector (which robot a material gets opened against) ────────────

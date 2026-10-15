@@ -10,10 +10,21 @@
             ".write": "auth != null",
             ".validate": "newData.isNumber() && (newData.val() == 0 || newData.val() == 1)"
           }
+        },
+        "flexi": {
+          ".write": "auth != null && root.child('robots').child('0').child('devices').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "faces": {
+          ".write": "auth != null && root.child('robots').child('0').child('devices').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "devices": {
+          "$uid": {
+            ".validate": "newData.hasChildren(['role', 'expiresAt']) && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= now + 129600000 && (newData.child('role').val() == 'face' || newData.child('role').val() == 'belly')"
+          }
         }
       },
       "$robotId": {
-        ".read": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child($robotId).child('email').val() == auth.token.email.toLowerCase()))",
+        ".read": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child($robotId).child('email').val() == auth.token.email.toLowerCase()) || root.child('robots').child($robotId).child('devices').child(auth.uid).child('expiresAt').val() > now)",
         ".write": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child($robotId).child('email').val() == auth.token.email.toLowerCase()))",
         "state": {
           "motors": {
@@ -23,7 +34,33 @@
             ".write": "auth != null",
             ".validate": "newData.isNumber() && (newData.val() == 0 || newData.val() == 1)"
           }
+        },
+        "flexi": {
+          ".write": "auth != null && root.child('robots').child($robotId).child('devices').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "faces": {
+          ".write": "auth != null && root.child('robots').child($robotId).child('devices').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "devices": {
+          "$uid": {
+            ".validate": "newData.hasChildren(['role', 'expiresAt']) && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= now + 129600000 && (newData.child('role').val() == 'face' || newData.child('role').val() == 'belly')"
+          }
         }
+      }
+    },
+    "pairing": {
+      "$code": {
+        ".read": "auth != null && (data.child('uid').val() == auth.uid || auth.token.firebase.sign_in_provider != 'anonymous')",
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() == auth.uid) || (data.child('uid').val() == auth.uid && !newData.exists()))",
+        ".validate": "$code.matches(/^[0-9]{6}$/) && newData.hasChildren(['uid', 'role', 'createdAt'])",
+        "uid": { ".validate": "newData.isString()" },
+        "role": { ".validate": "newData.val() == 'face' || newData.val() == 'belly'" },
+        "createdAt": { ".validate": "newData.val() == now" },
+        "robot": {
+          ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && !data.exists() && data.parent().child('createdAt').val() > now - 600000 && root.child('robots').child(newData.val()).exists() && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child(newData.val()).child('email').val() == auth.token.email.toLowerCase()))",
+          ".validate": "newData.isString() && !data.parent().child('robot').exists()"
+        },
+        "$other": { ".validate": false }
       }
     },
     "adminUids": {

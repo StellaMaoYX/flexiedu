@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect Robot Screen – FLEXI</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8edf2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #111827; padding: 16px;
+    }
+    .card {
+      background: #fff; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 28px 24px; width: 100%; max-width: 440px; text-align: center;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 6px; }
+    .sub { color: #6b7280; margin: 0 0 20px; font-size: 0.95rem; }
+    .roles { display: flex; gap: 12px; }
+    .role-btn {
+      flex: 1; padding: 18px 8px; border-radius: 14px; border: 2px solid #e5e7eb;
+      background: #f9fafb; font-size: 1.1rem; font-weight: 600; cursor: pointer;
+    }
+    .role-btn:hover { border-color: #6366f1; }
+    #qr { display: flex; justify-content: center; margin: 4px 0 16px; }
+    #qr img, #qr canvas { width: 200px; height: 200px; }
+    .code { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.12em; margin: 0 0 8px; }
+    .hint { color: #6b7280; font-size: 0.9rem; margin: 0 0 16px; }
+    .link-btn { background: none; border: none; color: #6366f1; font-size: 0.9rem; cursor: pointer; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Shown while signing in / checking a saved pairing -->
+    <div id="loadingView"><p class="sub">Connecting…</p></div>
+
+    <!-- This browser is signed in with a teacher account -->
+    <div id="teacherView" class="hidden">
+      <h1>This page is for the robot's screens</h1>
+      <p class="sub">This browser is signed in as <b id="teacherEmail"></b>. To use it as a robot face or belly screen, sign out first.</p>
+      <button class="role-btn" onclick="signOutForPairing()">Sign out and use as robot screen</button>
+    </div>
+
+    <!-- Pick which screen this device is -->
+    <div id="roleView" class="hidden">
+      <h1>Which screen is this?</h1>
+      <p class="sub">Choose once; this device will remember it.</p>
+      <div class="roles">
+        <button class="role-btn" onclick="chooseRole('face')">🙂 Face</button>
+        <button class="role-btn" onclick="chooseRole('belly')">📱 Belly</button>
+      </div>
+      <p class="hint" id="pairError" style="color:#b91c1c;margin-top:16px;"></p>
+    </div>
+
+    <!-- Waiting for the teacher to confirm -->
+    <div id="codeView" class="hidden">
+      <h1 id="codeTitle">Connect this screen</h1>
+      <p class="sub">Scan with your phone, or enter the code on the Connect Robot Screens page on your laptop.</p>
+      <div id="qr"></div>
+      <p class="code" id="pairCode"></p>
+      <p class="hint">The code changes every 10 minutes.</p>
+      <button class="link-btn" onclick="changeRole()">Not this screen? Change</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="scripts/config.js"></script>
+  <script src="../databasejs/scripts/database.js"></script>
+  <script src="scripts/pair.js"></script>
+</body>
+</html>
