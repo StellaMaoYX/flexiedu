@@ -48,6 +48,10 @@ function Database(config, readyCallback) {
   */
   Database.initialize = async function() {
     Database.app = await firebase.initializeApp(Database.config);
+    // The access check gets its own listener, registered first: several
+    // pages replace handleAuthStateChange with their own, which must not
+    // skip the check.
+    if (DATABASE_REQUIRE_ACCESS) firebase.auth().onAuthStateChanged(Database.accessGuard);
     firebase.auth().onAuthStateChanged(Database.handleAuthStateChange);
     // Handle the result after returning from Google redirect sign-in
     firebase.auth().getRedirectResult().catch(Database.handleError);
@@ -147,13 +151,13 @@ function Database(config, readyCallback) {
       };
 
       if (DATABASE_REQUIRE_ACCESS) {
-        Database.checkAccess().then(function(allowed) { if (allowed) start(); });
+        Database.accessPromise.then(function(allowed) { if (allowed) start(); });
       } else {
         start();
       }
 
     } else if (DATABASE_REQUIRE_ACCESS) {
-      Database.goHome();
+      // accessGuard sends signed-out visitors home
     } else {
       // User is signed out. Attempt to sign in.
       console.log('User is signed out. Attempting to sign in anonymously...');
@@ -168,16 +172,25 @@ function Database(config, readyCallback) {
     window.location.replace(home.href);
   }
 
+  Database.accessGuard = function(user) {
+    Database.accessPromise = Database.checkAccess(user);
+  }
+
   // Resolves true if this user may use the page. Admins may open any robot;
   // a teacher is redirected to the same page for their assigned robot when
   // the URL names another one (or none); anyone else sees a "no robot
-  // assigned" message instead of the page.
-  Database.checkAccess = function() {
-    if (Database.isAnonymous || !Database.userEmail) {
+  // assigned" message instead of the page. Signed-out and anonymous visitors
+  // go home to sign in.
+  Database.checkAccess = function(user) {
+    // Microsoft accounts don't always fill user.email; fall back to the
+    // email the provider reported.
+    var providerWithEmail = user && (user.providerData || []).find(p => p && p.email);
+    var email = user && (user.email || (providerWithEmail ? providerWithEmail.email : null));
+    if (!user || user.isAnonymous || !email) {
       Database.goHome();
       return Promise.resolve(false);
     }
-    var email = Database.userEmail.trim().toLowerCase();
+    email = email.trim().toLowerCase();
     var adminKey = email.replace(/\./g, ',');  // same encoding as scripts/index.js
     var db = firebase.database();
 
