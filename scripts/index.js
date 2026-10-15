@@ -400,7 +400,13 @@ function loadAdminList() {
 
     var html = '';
     Object.keys(admins).forEach(function(key) {
-      html += '<div class="admin-list-item"><span>' + decodeAdminEmailKey(key) + '</span>'
+      // Entries saved before /administrators/ was keyed by email are
+      // { "0": "someone@x.com" }: the email is the value, and the admin
+      // check (which looks up the email key) no longer recognises them.
+      var label = typeof admins[key] === 'string'
+        ? admins[key] + ' <span style="color:#b45309;font-size:0.8rem;">(old entry, not active — re-add)</span>'
+        : decodeAdminEmailKey(key);
+      html += '<div class="admin-list-item"><span>' + label + '</span>'
         + '<button class="btn-sm-del" onclick="deleteAdmin(\'' + key + '\')">✕</button></div>';
     });
     container.innerHTML = html;

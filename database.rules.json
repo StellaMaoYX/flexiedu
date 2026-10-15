@@ -1,0 +1,56 @@
+{
+  "rules": {
+    "robots": {
+      ".read": "auth != null && root.child('adminUids').child(auth.uid).exists()",
+      "0": {
+        ".read": true,
+        ".write": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child('0').child('email').val() == auth.token.email.toLowerCase()))",
+        "state": {
+          "headTouched": {
+            ".write": "auth != null",
+            ".validate": "newData.isNumber() && (newData.val() == 0 || newData.val() == 1)"
+          }
+        }
+      },
+      "$robotId": {
+        ".read": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child($robotId).child('email').val() == auth.token.email.toLowerCase()))",
+        ".write": "auth != null && (root.child('adminUids').child(auth.uid).exists() || (auth.token.email != null && root.child('idEmails').child($robotId).child('email').val() == auth.token.email.toLowerCase()))",
+        "state": {
+          "motors": {
+            ".read": true
+          },
+          "headTouched": {
+            ".write": "auth != null",
+            ".validate": "newData.isNumber() && (newData.val() == 0 || newData.val() == 1)"
+          }
+        }
+      }
+    },
+    "adminUids": {
+      ".read": false,
+      ".write": "auth != null && (root.child('adminUids').child(auth.uid).exists() || !root.child('adminUids').hasChildren())",
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid && newData.val() == true && auth.token.email_verified == true && root.child('administrators').child(auth.token.email.toLowerCase().replace('.', ',')).exists()"
+      }
+    },
+    "administrators": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
+      ".write": "auth != null && root.child('adminUids').child(auth.uid).exists()"
+    },
+    "idEmails": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
+      ".write": "auth != null && root.child('adminUids').child(auth.uid).exists()"
+    },
+    "robotapi": {
+      ".read": true,
+      ".write": "auth != null && root.child('adminUids').child(auth.uid).exists()"
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    }
+  }
+}
