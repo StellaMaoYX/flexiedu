@@ -1,4 +1,26 @@
 /*
+* Teacher pages load this script with a data-require-access attribute. On
+* those pages only an admin, or a teacher assigned a robot in /idEmails, may
+* stay; a teacher is always pinned to their own robot whatever the URL says.
+* The page stays hidden until that check passes.
+*/
+var DATABASE_REQUIRE_ACCESS = !!(document.currentScript &&
+  document.currentScript.hasAttribute('data-require-access'));
+if (DATABASE_REQUIRE_ACCESS) {
+  document.documentElement.style.visibility = 'hidden';
+  // If Firebase never loads, the check never runs; say so instead of
+  // leaving a blank page.
+  setTimeout(function() {
+    if (document.documentElement.style.visibility !== 'hidden') return;
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:24px;text-align:center;">' +
+      '<h2>Could not check your account</h2>' +
+      '<p style="color:#555;">Please check your internet connection and reload the page.</p></div>';
+    document.documentElement.style.visibility = '';
+  }, 15000);
+}
+
+/*
 * Database class for interfacing with the Firebase realtime database
 */
 function Database(config, readyCallback) {
@@ -116,17 +138,99 @@ function Database(config, readyCallback) {
         }
       }
 
-      // Create directory in database to save this user's data
-      Database.logEvent("SessionStarted");
+      var start = function() {
+        // Create directory in database to save this user's data
+        Database.logEvent("SessionStarted");
 
-      if (Database.readyCallback != null || Database.readyCallback != undefined)
-        Database.readyCallback(Database.uid);
+        if (Database.readyCallback != null || Database.readyCallback != undefined)
+          Database.readyCallback(Database.uid);
+      };
 
+      if (DATABASE_REQUIRE_ACCESS) {
+        Database.checkAccess().then(function(allowed) { if (allowed) start(); });
+      } else {
+        start();
+      }
+
+    } else if (DATABASE_REQUIRE_ACCESS) {
+      Database.goHome();
     } else {
       // User is signed out. Attempt to sign in.
       console.log('User is signed out. Attempting to sign in anonymously...');
       Database.signInAnonymously();
     }
+  }
+
+  // Send signed-out and anonymous visitors back to the home page to sign in.
+  Database.goHome = function() {
+    window.location.replace(new URL('../index.html', window.location.href).href);
+  }
+
+  // Resolves true if this user may use the page. Admins may open any robot;
+  // a teacher is redirected to the same page for their assigned robot when
+  // the URL names another one (or none); anyone else sees a "no robot
+  // assigned" message instead of the page.
+  Database.checkAccess = function() {
+    if (Database.isAnonymous || !Database.userEmail) {
+      Database.goHome();
+      return Promise.resolve(false);
+    }
+    var email = Database.userEmail.trim().toLowerCase();
+    var adminKey = email.replace(/\./g, ',');  // same encoding as scripts/index.js
+    var db = firebase.database();
+
+    return db.ref('/administrators/' + adminKey).once('value').then(function(snap) {
+      if (snap.exists()) return 'admin';
+      return db.ref('idEmails').once('value').then(function(idSnap) {
+        var data = idSnap.val() || {};
+        var robotId = null;
+        Object.keys(data).forEach(function(id) {
+          if (data[id] && data[id].email && data[id].email.toLowerCase() === email) robotId = id;
+        });
+        return robotId;
+      });
+    }).then(function(access) {
+      if (access === 'admin') {
+        document.documentElement.style.visibility = '';
+        return true;
+      }
+      if (access === null) {
+        Database.showNoRobot(email);
+        return false;
+      }
+      // Teacher: pages read either ?robotId= or ?robot=, so pin both.
+      var url = new URL(window.location.href);
+      var changed = url.searchParams.has('role');
+      url.searchParams.delete('role');
+      ['robotId', 'robot'].forEach(function(key) {
+        if (url.searchParams.get(key) !== String(access)) {
+          url.searchParams.set(key, access);
+          changed = true;
+        }
+      });
+      if (changed) {
+        window.location.replace(url.href);
+        return false;
+      }
+      document.documentElement.style.visibility = '';
+      return true;
+    }).catch(function(error) {
+      Database.handleError(error);
+      Database.showNoRobot(email);
+      return false;
+    });
+  }
+
+  Database.showNoRobot = function(email) {
+    var home = new URL('../index.html', window.location.href).href;
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:24px;text-align:center;">' +
+      '<h2 style="margin-bottom:12px;">No robot assigned</h2>' +
+      '<p style="color:#555;">The account <b></b> has not been assigned a robot yet. ' +
+      'Please ask a FLEXI administrator to assign one.</p>' +
+      '<p style="margin-top:20px;"><a href="' + home + '">Back to home</a></p></div>';
+    document.body.querySelector('b').textContent = email;
+    document.documentElement.style.visibility = '';
   }
 
   Database.signOut = function() {

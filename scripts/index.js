@@ -120,7 +120,9 @@ function onSignedIn(user) {
     avatar.style.display = 'none';
   }
 
-  setLaunchButtonsEnabled(true);
+  // Launch buttons stay disabled until we know this account is an admin or
+  // has a robot assigned.
+  setLaunchButtonsEnabled(false);
 
   // Check admin first — a single-key existence check against the encoded
   // email (see encodeAdminEmailKey above).
@@ -170,6 +172,7 @@ function setButtonUrls(isAdmin, robotId) {
 function showAdminView(user) {
   setRobotIdStatus('admin');
   setButtonUrls(true, null);
+  setLaunchButtonsEnabled(true);
   var panel = document.getElementById('adminPanel');
   panel.classList.add('visible');
   loadAdminList();
@@ -198,8 +201,10 @@ function checkTeacherRole(email) {
     if (robotId !== null) {
       setRobotIdStatus('teacher', robotId);
       setButtonUrls(false, robotId);
+      setLaunchButtonsEnabled(true);
     } else {
       setRobotIdStatus('unknown');
+      setLaunchButtonsEnabled(false);
     }
   });
 }
