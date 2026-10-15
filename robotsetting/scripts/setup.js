@@ -135,6 +135,10 @@ function updateSoundList(snapshot) {
 function updateBellyScreenList(snapshot) {
   var bellyDiv = document.getElementById("bellySetup");
   bellyScreens = snapshot.val();
+  // The belly section is commented out in setup.html (belly-editor.html
+  // handles it now), so there may be nowhere to render.
+  if (bellyDiv == null)
+    return;
   var bellyHTML = "";
   
   if (bellyScreens != undefined && bellyScreens.length>0) {
@@ -455,6 +459,9 @@ function updateRobotImportList(snapshot) {
 
 function updatePoseList(snapshot) {
   poses = snapshot.val();
+  // Robots that haven't had movement enabled have no poses yet.
+  if (poses == null)
+    return;
   console.log('POSES: ' + poses.length);
   var dbRefAPI = firebase.database().ref('robots/' + currentRobot + '/customAPI/states/poses/');
   var selectedRobotPoseNames = {};
