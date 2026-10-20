@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FLEXI Network Check</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #f5f7fa; color: #1f2937;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 32px 16px 60px; }
+    h1 { font-size: 1.8rem; margin: 0 0 6px; }
+    .sub { color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+    .summary {
+      border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; font-weight: 600;
+      background: #eef2ff; color: #1a56a0;
+    }
+    .summary.ok { background: #ecfdf5; color: #047857; }
+    .summary.bad { background: #fef2f2; color: #b91c1c; }
+    .card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 10px 12px; border-top: 1px solid #f1f5f9; vertical-align: top; }
+    th { background: #f9fafb; border-top: none; }
+    code { font-size: 0.85rem; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    .status { white-space: nowrap; font-weight: 600; }
+    .pass { color: #047857; } .fail { color: #b91c1c; } .wait { color: #6b7280; }
+    .detail { color: #6b7280; font-size: 0.85rem; }
+    .actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      padding: 10px 18px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    }
+    button.primary { background: #1a56a0; border-color: #1a56a0; color: #fff; }
+    .note { color: #6b7280; font-size: 0.85rem; margin-top: 18px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>FLEXI Network Check</h1>
+    <p class="sub">Open this page on the school network, on the device you want to test (a teacher laptop, or the robot's phone or tablet). It checks every service FLEXI needs and shows which ones are blocked.</p>
+
+    <div class="summary" id="summary">Checking…</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Domain</th><th>Used for</th><th>Result</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="primary" onclick="runAll()">Run again</button>
+      <button onclick="copyResults()">Copy results</button>
+      <span id="copyMsg" class="detail" style="align-self:center;"></span>
+    </div>
+    <p class="note">Each check confirms the real content came back, so a filter's block page counts as blocked.
+      If this page itself didn't open, <code>stellamaoyx.github.io</code> is blocked.</p>
+  </main>
+
+  <script>
+    var TIMEOUT_MS = 10000;
+    var FIREBASE_KEY = 'AIzaSyB10dHhQqD1TMXTJfQNLmFkrJtVyQ4JTuA';
+    var DB_HOST = 'flexi-f7d77-default-rtdb.firebaseio.com';
+
+    function withTimeout(promise) {
+      return Promise.race([promise, new Promise(function(_, reject) {
+        setTimeout(function() { reject(new Error('no response after ' + TIMEOUT_MS / 1000 + 's')); }, TIMEOUT_MS);
+      })]);
+    }
+
+    function fetchJson(url, options) {
+      return fetch(url, Object.assign({ cache: 'no-store' }, options)).then(function(r) {
+        return r.json().catch(function() { throw new Error('got something other than the expected data (HTTP ' + r.status + ')'); });
+      });
+    }
+
+    // Loads a script and checks that it defined what it should.
+    function loadScript(url, check) {
+      return new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 'nc=' + Date.now();
+        s.onload = function() { check() ? resolve() : reject(new Error('loaded, but not the real file')); };
+        s.onerror = function() { reject(new Error('could not load')); };
+        document.head.appendChild(s);
+      });
+    }
+
+    var CHECKS = [
+      { domain: 'stellamaoyx.github.io', use: 'FLEXI website', run: function() {
+          return fetch('privacy.html', { cache: 'no-store' }).then(function(r) { return r.text(); })
+            .then(function(t) { if (t.indexOf('FLEXI Privacy Statement') < 0) throw new Error('unexpected content'); });
+        } },
+      { domain: '*.firebaseio.com', use: 'Live database (read)', run: function() {
+          return fetchJson('https://' + DB_HOST + '/robotapi.json?shallow=true').then(function(d) {
+            if (!d || typeof d !== 'object' || d.error) throw new Error('unexpected reply');
+          });
+        } },
+      { domain: '*.firebaseio.com (wss://)', use: 'Live database (WebSocket: live updates)', run: function() {
+          return new Promise(function(resolve, reject) {
+            var ws;
+            try { ws = new WebSocket('wss://' + DB_HOST + '/.ws?v=5&ns=flexi-f7d77-default-rtdb'); }
+            catch (e) { return reject(new Error('WebSocket not allowed')); }
+            ws.onmessage = function(e) {
+              ws.close();
+              try { JSON.parse(e.data); resolve(); } catch (err) { reject(new Error('unexpected reply')); }
+            };
+            ws.onerror = function() { reject(new Error('connection blocked or dropped')); };
+            ws.onclose = function(e) { if (!e.wasClean) reject(new Error('connection closed (code ' + e.code + ')')); };
+          });
+        } },
+      { domain: 'identitytoolkit.googleapis.com', use: 'Sign-in (Firebase)', run: function() {
+          return fetchJson('https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=' + FIREBASE_KEY, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ providerId: 'google.com', continueUri: location.href })
+          }).then(function(d) { if (!d.authUri) throw new Error('unexpected reply'); });
+        } },
+      { domain: 'accounts.google.com', use: 'Google sign-in', run: function() {
+          return fetchJson('https://accounts.google.com/.well-known/openid-configuration')
+            .then(function(d) { if (!d.issuer) throw new Error('unexpected reply'); });
+        } },
+      { domain: 'login.microsoftonline.com', use: 'Microsoft sign-in', run: function() {
+          return fetchJson('https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration')
+            .then(function(d) { if (!d.issuer) throw new Error('unexpected reply'); });
+        } },
+      { domain: 'flexi-f7d77.firebaseapp.com', use: 'Sign-in window', run: function() {
+          // This domain doesn't allow other sites to read its pages, so only the
+          // connection itself can be checked here.
+          return fetch('https://flexi-f7d77.firebaseapp.com/__/auth/handler.js?nc=' + Date.now(), { mode: 'no-cors' })
+            .then(function() { return 'connected (content not checked)'; });
+        } },
+      { domain: 'www.gstatic.com', use: 'Firebase libraries', run: function() {
+          return loadScript('https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js',
+            function() { return !!(window.firebase && window.firebase.initializeApp); });
+        } },
+      { domain: 'code.jquery.com', use: 'Page scripts (jQuery)', run: function() {
+          return loadScript('https://code.jquery.com/jquery-3.3.1.slim.min.js',
+            function() { return !!(window.jQuery && window.jQuery.fn); });
+        } },
+      { domain: 'stackpath.bootstrapcdn.com', use: 'Page layout (Bootstrap)', run: function() {
+          var jq = window.jQuery ? Promise.resolve()
+            : loadScript('https://code.jquery.com/jquery-3.3.1.slim.min.js', function() { return !!window.jQuery; });
+          return jq.catch(function() { throw new Error('needs code.jquery.com first'); }).then(function() {
+            return loadScript('https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js',
+              function() { return !!(window.jQuery && window.jQuery.fn.modal); });
+          });
+        } },
+      { domain: 'cdnjs.cloudflare.com', use: 'Pairing QR codes', run: function() {
+          return loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+            function() { return typeof window.QRCode === 'function'; });
+        } },
+      { domain: 'cdn.jsdelivr.net', use: 'Page scripts', run: function() {
+          return fetch('https://cdn.jsdelivr.net/npm/jquery@3.3.1/package.json', { cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { if (d.name !== 'jquery') throw new Error('unexpected reply'); });
+        } },
+      { domain: '*.cloudinary.com', use: 'Lesson images', run: function() {
+          return new Promise(function(resolve, reject) {
+            var img = new Image();
+            img.onload = function() { img.naturalWidth > 0 ? resolve() : reject(new Error('empty image')); };
+            img.onerror = function() { reject(new Error('could not load image')); };
+            img.src = 'https://res.cloudinary.com/demo/image/upload/w_10/sample.jpg?nc=' + Date.now();
+          });
+        } },
+    ];
+
+    var results = [];
+
+    function render() {
+      var rows = document.getElementById('rows');
+      rows.innerHTML = '';
+      CHECKS.forEach(function(c, i) {
+        var r = results[i] || { state: 'wait' };
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><code></code></td><td></td><td><span class="status"></span><div class="detail"></div></td>';
+        tr.querySelector('code').textContent = c.domain;
+        tr.children[1].textContent = c.use;
+        var status = tr.querySelector('.status');
+        status.className = 'status ' + r.state;
+        status.textContent = r.state === 'pass' ? '✅ OK' : r.state === 'fail' ? '❌ Blocked' : '… checking';
+        tr.querySelector('.detail').textContent = r.detail || '';
+        rows.appendChild(tr);
+      });
+
+      var done = results.filter(Boolean).length === CHECKS.length;
+      var failed = results.filter(function(r) { return r && r.state === 'fail'; }).length;
+      var summary = document.getElementById('summary');
+      if (!done) { summary.className = 'summary'; summary.textContent = 'Checking…'; }
+      else if (!failed) { summary.className = 'summary ok'; summary.textContent = '✅ Everything FLEXI needs is reachable from this network.'; }
+      else { summary.className = 'summary bad'; summary.textContent = '❌ ' + failed + ' of ' + CHECKS.length + ' blocked. FLEXI will not work fully on this network until they are allowed.'; }
+    }
+
+    function runAll() {
+      results = [];
+      render();
+      // One at a time, so a later check that needs an earlier library (Bootstrap needs jQuery) sees it.
+      CHECKS.reduce(function(chain, c, i) {
+        return chain.then(function() {
+          var start = performance.now();
+          return withTimeout(Promise.resolve().then(c.run)).then(function(note) {
+            var ms = Math.round(performance.now() - start) + ' ms';
+            results[i] = { state: 'pass', detail: typeof note === 'string' ? note + ', ' + ms : ms };
+          }, function(err) {
+            results[i] = { state: 'fail', detail: err && err.message ? err.message : 'blocked' };
+          }).then(render);
+        });
+      }, Promise.resolve());
+    }
+
+    function copyResults() {
+      var lines = ['FLEXI Network Check', new Date().toString(), navigator.userAgent, ''];
+      CHECKS.forEach(function(c, i) {
+        var r = results[i] || { state: 'wait' };
+        lines.push((r.state === 'pass' ? 'OK      ' : r.state === 'fail' ? 'BLOCKED ' : 'PENDING ') +
+          c.domain + '  (' + c.use + ')' + (r.detail ? ' - ' + r.detail : ''));
+      });
+      var text = lines.join('\n');
+      var msg = document.getElementById('copyMsg');
+      navigator.clipboard.writeText(text).then(function() { msg.textContent = 'Copied. Paste it into an email.'; },
+        function() { msg.textContent = 'Could not copy automatically; select the table and copy it.'; });
+    }
+
+    runAll();
+  </script>
+</body>
+</html>
