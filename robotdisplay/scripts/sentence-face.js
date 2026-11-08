@@ -3,9 +3,9 @@
  * Drives the robot face SVG for the sentence ordering activity.
  *
  * Three states:
- *   working – smiling, looking around, gentle blink (default)
- *   correct – big green smile, fast blink, sparkle overlay
- *   stuck   – sad frown, eyes down, animated teardrops
+ *   working – the thinking face (default, or the one the student made)
+ *   correct – same face: wider eyes, bigger smile, fast blink, sparkles
+ *   stuck   – same face: droopy eyes, frown, animated teardrops
  *
  * Switches state by listening to Firebase:
  *   /robots/{id}/flexi/result   → correct or stuck
@@ -21,7 +21,7 @@
   const STATE_STUCK   = 'stuck';
 
   let currentFaceState = null;
-  let customFaceParams = null; // editor-shaped {key:{type,current,...}} pushed from face-editor.html, layered onto PARAMS_WORKING
+  let customFaceParams = null; // editor-shaped {key:{type,current,...}} pushed from the face maker / editor, layered onto PARAMS_WORKING for every state
 
   // ── Shared eye geometry ────────────────────────────────────────────────────
   const EYE_BASE = {
@@ -61,56 +61,40 @@
     hasText:               0,
   });
 
-  const PARAMS_CORRECT = Object.assign({}, EYE_BASE, {
-    isHorizontal:          1,
-    backgroundColor:       '#146e3c',
-    eyeOuterColor:         '#b7f5d1',
-    eyeInnerColor:         '#063d1e',
-    eyePupilColor:         '#2ecc71',
-    eyelidOffset:          35,          // wide open excited eyes
-    hasBlinking:           1,
-    avgBlinkTime:          1200,
-    hasMouth:              1,
-    mouthWPercent:         4,
-    mouthYPercent:         76,
-    mouthH:                18,
-    mouthColor:            '#b7f5d1',
-    mouthStrokeWidth:      7,
-    mouthSlope:            14,
-    hasNose:               0,
-    hasText:               0,
-  });
+  // Correct / stuck reuse the thinking face (the default above, or the face
+  // the student made) and only change the expression: eyelids, blinking,
+  // mouth shape and where the eyes look. Colours and eye/mouth shape stay.
+  const EXPRESSION_CORRECT = {
+    eyelidDelta:   7,      // wider open, excited eyes
+    hasBlinking:   1,
+    avgBlinkTime:  1200,   // quick happy blinks
+    mouthHScale:   1.3,    // bigger smile
+  };
 
-  const PARAMS_STUCK = Object.assign({}, EYE_BASE, {
-    isHorizontal:          1,
-    backgroundColor:       '#46465a',
-    eyeOuterColor:         '#c8c8d8',
-    eyeInnerColor:         '#222233',
-    eyePupilColor:         '#6666aa',
-    eyelidOffset:          12,          // droopy but not blocking iris
-    hasBlinking:           0,
-    avgBlinkTime:          99999,
-    hasMouth:              1,
-    mouthWPercent:         3,
-    mouthYPercent:         76,
-    mouthH:                14,
-    mouthColor:            '#9090a8',
-    mouthStrokeWidth:      7,
-    mouthSlope:            12,
-    hasNose:               0,
-    hasText:               0,
-  });
+  const EXPRESSION_STUCK = {
+    eyelidDelta:   -16,    // droopy eyelids
+    hasBlinking:   0,
+    avgBlinkTime:  99999,
+    mouthHScale:   1,
+  };
 
   // ── State transitions ──────────────────────────────────────────────────────
   function applyState(state) {
     if (state === currentFaceState) return;
     currentFaceState = state;
+    renderState(state);
+  }
 
+  // Draws the given state from scratch. Split out from applyState so a live
+  // face push can re-render immediately without fighting its "same state,
+  // skip" guard.
+  function renderState(state) {
     stopSparkles();
     removeTears();
+    applyThinkingFace();
 
     if (state === STATE_CORRECT) {
-      Object.assign(Face.parameters, PARAMS_CORRECT);
+      applyExpression(EXPRESSION_CORRECT);
       Face.isMouthInverted  = false;
       Face.isMouthExtended  = true;
       Eyes.isLookingAround  = true;
@@ -119,7 +103,7 @@
       setLabel('Correct! ✅');
 
     } else if (state === STATE_STUCK) {
-      Object.assign(Face.parameters, PARAMS_STUCK);
+      applyExpression(EXPRESSION_STUCK);
       Face.isMouthInverted  = true;
       Face.isMouthExtended  = true;
       Eyes.isLookingAround  = false;
@@ -129,24 +113,34 @@
       setLabel("Uh-oh… let's try again");
 
     } else {
-      renderWorking();
+      Face.isMouthInverted  = false;
+      Face.isMouthExtended  = true;
+      Eyes.isLookingAround  = true;
+      Face.draw();
+      setLabel('Thinking… 🤔');
     }
   }
 
-  // Renders the working look: base preset, then any custom face pushed from
-  // face-editor.html layered on top. Split out from applyState so a live
-  // push can re-render immediately without fighting its "same state, skip" guard.
-  function renderWorking() {
+  // Sets Face.parameters to the thinking face: base preset, then any custom
+  // face pushed from the face maker / editor layered on top (no redraw).
+  function applyThinkingFace() {
     Object.assign(Face.parameters, PARAMS_WORKING);
-    Face.isMouthInverted  = false;
-    Face.isMouthExtended  = true;
-    Eyes.isLookingAround  = true;
-    if (customFaceParams) {
-      Face.updateParameters(customFaceParams); // overrides pushed keys + redraws
-    } else {
-      Face.draw();
-    }
-    setLabel('Thinking… 🤔');
+    if (!customFaceParams) return;
+    Object.keys(customFaceParams).forEach(key => {
+      const param = customFaceParams[key];
+      if (!param || typeof param !== 'object' || param.current === undefined) return;
+      Face.parameters[key] = (param.type === 'number' || param.type === 'boolean')
+        ? Number(param.current)
+        : String(param.current);
+    });
+  }
+
+  function applyExpression(expr) {
+    const p = Face.parameters;
+    p.eyelidOffset = Math.max(0, Math.min(50, p.eyelidOffset + expr.eyelidDelta));
+    p.hasBlinking  = expr.hasBlinking;
+    p.avgBlinkTime = expr.avgBlinkTime;
+    p.mouthH       = p.mouthH * expr.mouthHScale;
   }
 
   function setLabel(text) {
@@ -287,11 +281,11 @@
       if (data.status === 'answering') applyState(STATE_WORKING);
     });
 
-    // Face pushed live from face-editor.html → re-render immediately if
-    // currently showing (or about to show) the working look
+    // Face pushed live from the face maker / editor → re-render the current
+    // state right away (every state is built on this face)
     db.ref(`/robots/${robotId}/flexi/customFace`).on('value', snap => {
       customFaceParams = snap.val() || null;
-      if (currentFaceState === STATE_WORKING || currentFaceState === null) renderWorking();
+      renderState(currentFaceState || STATE_WORKING);
     });
   }
 
