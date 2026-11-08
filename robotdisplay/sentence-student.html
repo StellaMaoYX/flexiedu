@@ -413,9 +413,35 @@
       .check-btn { font-size: 1.2rem; padding: 14px 36px; }
       .feedback-card { padding: 28px 24px; }
     }
+
+    /* ── Tap to start: shown when the browser blocks speech until a tap ── */
+    #tapToStart {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(238, 242, 255, 0.94);
+      align-items: center;
+      justify-content: center;
+    }
+    #tapToStart.show { display: flex; }
+    #tapToStart button {
+      font: bold 2rem Arial, Helvetica, sans-serif;
+      color: white;
+      background: #1a56a0;
+      border: none;
+      border-radius: 24px;
+      padding: 32px 56px;
+      box-shadow: 0 6px 20px rgba(26, 86, 160, 0.35);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+
+  <div id="tapToStart">
+    <button type="button" id="tapToStartBtn">&#128266; Tap to start</button>
+  </div>
 
   <div id="waitingScreen">
     <div class="wait-icon">🤖</div>

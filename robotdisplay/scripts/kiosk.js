@@ -5,7 +5,8 @@
  * this script makes the page itself hard to mess up:
  *   - keeps the screen awake (no auto-lock mid-lesson)
  *   - goes full screen on the first tap and, while full screen, keeps
- *     Esc, Alt+Tab and the Windows key inside the page (hold Esc to leave)
+ *     Esc, Alt+Tab and the Windows key inside the page (hold Esc to leave);
+ *     not when a signed-in teacher opens the page to have a look
  *   - no zooming (pinch, Ctrl+wheel, Ctrl +/-), text selection, press-and-hold
  *     or right-click menus, swipe back/forward, print, find or save
  *   - the Back button/gesture stays on the current screen
@@ -75,9 +76,20 @@
   // Browsers only allow full screen after a tap. In Windows' kiosk mode Edge
   // already fills the screen, but this also hides Edge's own bar and, with
   // the keyboard lock, keeps Alt+Tab / Windows key / Esc from leaving.
+  // Robot screens use an anonymous sign-in; a teacher's account means
+  // someone is previewing the page on their own computer.
+  function isTeacherBrowser() {
+    try {
+      var user = firebase.auth().currentUser;
+      return !!(user && !user.isAnonymous);
+    } catch (e) {
+      return false;  // Firebase not ready yet: treat as a robot screen
+    }
+  }
+
   function goFullScreen() {
     var el = document.documentElement;
-    if (document.fullscreenElement || !el.requestFullscreen) return;
+    if (document.fullscreenElement || !el.requestFullscreen || isTeacherBrowser()) return;
     el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
       if (navigator.keyboard && navigator.keyboard.lock)
         navigator.keyboard.lock().catch(function() {});

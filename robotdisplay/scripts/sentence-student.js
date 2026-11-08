@@ -847,7 +847,11 @@ function speakText(text) {
   clearTimeout(speakTimer);
   const say = () => {
     // voice and speed follow the teacher's setting (robot-voice.js)
-    window.speechSynthesis.speak(RobotVoice.utterance(text));
+    const utt = RobotVoice.utterance(text);
+    utt.addEventListener('error', e => {
+      if (e.error === 'not-allowed') askForTap(text);
+    });
+    window.speechSynthesis.speak(utt);
   };
   if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     RobotVoice.cancel();
@@ -856,6 +860,26 @@ function speakText(text) {
     say();  // right away: iPad only allows speech started directly by a tap
   }
 }
+
+// Browsers only let a page speak after someone has tapped it. Right after
+// the belly screen opens or reloads (e.g. an automatic update), speech is
+// blocked until then: show a big button, and say the latest sentence on tap.
+let blockedText = null;
+
+function askForTap(text) {
+  blockedText = text;
+  document.getElementById('tapToStart').classList.add('show');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('tapToStartBtn').addEventListener('click', () => {
+    document.getElementById('tapToStart').classList.remove('show');
+    const text = blockedText;
+    blockedText = null;
+    lastSpoken = { text: '', at: 0 };
+    if (text) speakText(text);
+  });
+});
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
