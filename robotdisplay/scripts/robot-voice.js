@@ -3,7 +3,8 @@
  *   /robots/{id}/voice – the teacher's choice: { name, rate }. An empty name
  *     means "the most natural-sounding English voice this device has".
  *   /robots/{id}/voiceOptions/{face|belly} – the English voices each paired
- *     screen really has. Voices differ by device and browser (Edge on Windows
+ *     screen really has, and lastSpoken: which voice it really used for its
+ *     last sentence and what happened (start/end/error, a switch of voice). Voices differ by device and browser (Edge on Windows
  *     has "Microsoft Clara Online (Natural)", Android Chrome has Google's), so
  *     the teacher's dropdown lists these instead of the teacher's own voices.
  * A chosen voice a screen doesn't have falls back to its automatic pick.
@@ -82,7 +83,7 @@ var RobotVoice = (function() {
     return automaticVoice(localOnly);
   }
 
-  function utterance(text, localOnly) {
+  function utterance(text, localOnly, switchedFrom) {
     var utt = new SpeechSynthesisUtterance(text);
     var voice = currentVoice(localOnly);
     if (voice) {
@@ -93,8 +94,31 @@ var RobotVoice = (function() {
     }
     utt.rate = settings.rate;
     latestUtterance = utt;
+    noteWhatHappens(utt, voice, switchedFrom);
     if (voice && !voice.localService) retryLocallyIfSilent(utt, text);
     return utt;
+  }
+
+  // Tell the teacher's page what this screen really said, with which voice,
+  // and the events the browser sent – so "it sounds wrong" can be explained.
+  function noteWhatHappens(utt, voice, switchedFrom) {
+    if (!isPairedDevice || !role) return;
+    var createdAt = Date.now();
+    var events = [];
+    function add(name) { events.push(name + ' ' + (Date.now() - createdAt) + 'ms'); }
+    function save() {
+      firebase.database().ref('/robots/' + robotId + '/voiceOptions/' + role + '/lastSpoken').set({
+        text: utt.text.slice(0, 80),
+        voice: voice ? voice.name : '(browser default)',
+        online: !!(voice && !voice.localService),
+        switchedFrom: switchedFrom || '',
+        events: events.join(', '),
+        at: firebase.database.ServerValue.TIMESTAMP
+      }).catch(function() {});
+    }
+    utt.addEventListener('start', function() { add('start'); });
+    utt.addEventListener('end', function() { add('end'); save(); });
+    utt.addEventListener('error', function(e) { add('error:' + e.error); save(); });
   }
 
   // An online voice can fail without the internet: it reports an error, or
@@ -105,24 +129,24 @@ var RobotVoice = (function() {
     var createdAt = Date.now();
     var started = false;
     var retried = false;
-    function retry() {
+    function retry(reason) {
       // stopped on purpose, or a newer sentence has taken over: leave it
       if (started || retried || latestUtterance !== utt) return;
       retried = true;
       onlineFailedAt = Date.now();
-      console.warn('Online voice failed, using a voice on this device');
+      console.warn('Online voice failed (' + reason + '), using a voice on this device');
       window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance(text, true));
+      window.speechSynthesis.speak(utterance(text, true, utt.voice.name + ' – ' + reason));
     }
     utt.addEventListener('start', function() { started = true; });
     utt.addEventListener('boundary', function() { started = true; });
     utt.addEventListener('end', function() {
-      if (Date.now() - createdAt < FAILED_END_MS) retry();
+      if (Date.now() - createdAt < FAILED_END_MS) retry('ended without a sound');
     });
     utt.addEventListener('error', function(e) {
       // interrupted/canceled: a newer sentence replaced this one;
       // not-allowed: no voice may speak yet, a local one won't either
-      if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1) retry();
+      if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1) retry('error: ' + e.error);
     });
   }
 
@@ -157,7 +181,7 @@ var RobotVoice = (function() {
     var key = JSON.stringify(voices);
     if (!voices.length || key === lastReport) return;
     lastReport = key;
-    firebase.database().ref('/robots/' + robotId + '/voiceOptions/' + role).set({
+    firebase.database().ref('/robots/' + robotId + '/voiceOptions/' + role).update({
       voices: voices,
       automatic: auto ? auto.name : '',
       updatedAt: firebase.database.ServerValue.TIMESTAMP

@@ -23,7 +23,12 @@ var VoiceSettings = (function() {
     '.vs-actions { display: flex; align-items: center; gap: 10px; }' +
     '.vs-test { padding: 7px 14px; border: 2px solid #1a56a0; border-radius: 8px; background: white; color: #1a56a0; font-weight: bold; cursor: pointer; }' +
     '.vs-test:hover { background: #f0f4ff; }' +
-    '.vs-status { font-size: 0.8rem; color: #1e7a4a; }';
+    '.vs-status { font-size: 0.8rem; color: #1e7a4a; }' +
+    '.vs-last { margin-top: 12px; padding: 8px 10px; background: #f6f8fc; border-radius: 8px; font-size: 0.78rem; color: #555; line-height: 1.45; }' +
+    '.vs-last:empty { display: none; }' +
+    '.vs-last b { color: #333; }' +
+    '.vs-last .vs-warn { color: #b4532a; }' +
+    '.vs-last .vs-events { color: #999; }';
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function(c) {
@@ -66,10 +71,12 @@ var VoiceSettings = (function() {
       '<div class="vs-actions">' +
         '<button type="button" class="vs-test" id="vsTest">&#128266; Test on robot</button>' +
         '<span class="vs-status" id="vsStatus"></span>' +
-      '</div>';
+      '</div>' +
+      '<div class="vs-last" id="vsLast"></div>';
 
     var select = document.getElementById('vsVoice');
     var hint = document.getElementById('vsVoiceHint');
+    var last = document.getElementById('vsLast');
     var rateInput = document.getElementById('vsRate');
     var rateValue = document.getElementById('vsRateValue');
     var status = document.getElementById('vsStatus');
@@ -127,6 +134,26 @@ var VoiceSettings = (function() {
         hint.textContent = 'Now using ' + automatic.join(' and ') + '.';
       else
         hint.textContent = 'A screen that doesn\'t have this voice uses its most natural one.';
+      renderLastSpoken();
+    }
+
+    // What each screen really said last, with which voice – shows when a
+    // chosen voice didn't work there and the screen switched to another.
+    function renderLastSpoken() {
+      var html = '';
+      Object.keys(options).forEach(function(screen) {
+        var spoken = options[screen].lastSpoken;
+        if (!spoken) return;
+        html += '<div><b>' + esc(SCREEN_NAMES[screen].replace(/^./, function(c) { return c.toUpperCase(); })) +
+          '</b> last said “' + esc(spoken.text) + '” with <b>' + esc(spoken.voice) + '</b>' +
+          (spoken.at ? ' at ' + new Date(spoken.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + '.';
+        if (spoken.switchedFrom)
+          html += '<br><span class="vs-warn">Switched from ' + esc(spoken.switchedFrom) + '.</span>';
+        if (spoken.events)
+          html += '<br><span class="vs-events">' + esc(spoken.events) + '</span>';
+        html += '</div>';
+      });
+      last.innerHTML = html;
     }
 
     function renderRate() {
