@@ -8,7 +8,7 @@
  *     the teacher's dropdown lists these instead of the teacher's own voices.
  * A chosen voice a screen doesn't have falls back to its automatic pick.
  * Online voices (Edge's "Online (Natural)" ones, like Clara) need the
- * internet: when one fails or doesn't start, the sentence is said again with
+ * internet: when one clearly fails, the sentence is said again with
  * the best voice installed on the device (e.g. Zira on Windows).
  * ═══════════════════════════════════════════════════════════════════════════ */
 var RobotVoice = (function() {
@@ -19,7 +19,7 @@ var RobotVoice = (function() {
   var isPairedDevice = false;
   var lastReport = '';
 
-  var ONLINE_START_TIMEOUT_MS = 4000;   // no sound by then: treat as failed
+  var FAILED_END_MS = 400;              // "ended" sooner than this: nothing was said
   var ONLINE_RETRY_AFTER_MS = 60000;    // after a failure, stay local this long
   var onlineFailedAt = 0;
   var latestUtterance = null;
@@ -97,33 +97,39 @@ var RobotVoice = (function() {
     return utt;
   }
 
-  // An online voice can error out, or (offline in Edge) end or hang without
-  // a sound. Then cancel it and say the same sentence with a local voice.
+  // An online voice can fail without the internet: it reports an error, or
+  // "ends" at once without a sound. Then say the same sentence again with a
+  // local voice. Only clear failures count – a slow start or a missing
+  // 'start' event is not one, or the sentence would be said twice.
   function retryLocallyIfSilent(utt, text) {
+    var createdAt = Date.now();
     var started = false;
     var retried = false;
-    var timer = null;
     function retry() {
-      // a newer sentence has taken over: leave it alone
+      // stopped on purpose, or a newer sentence has taken over: leave it
       if (started || retried || latestUtterance !== utt) return;
       retried = true;
-      clearTimeout(timer);
       onlineFailedAt = Date.now();
       console.warn('Online voice failed, using a voice on this device');
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance(text, true));
     }
-    utt.addEventListener('start', function() {
-      started = true;
-      clearTimeout(timer);
+    utt.addEventListener('start', function() { started = true; });
+    utt.addEventListener('boundary', function() { started = true; });
+    utt.addEventListener('end', function() {
+      if (Date.now() - createdAt < FAILED_END_MS) retry();
     });
-    utt.addEventListener('end', retry);
     utt.addEventListener('error', function(e) {
       // interrupted/canceled: a newer sentence replaced this one;
       // not-allowed: no voice may speak yet, a local one won't either
       if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1) retry();
     });
-    timer = setTimeout(retry, ONLINE_START_TIMEOUT_MS);
+  }
+
+  // Stop whatever is being said, without it counting as a failed voice.
+  function cancel() {
+    latestUtterance = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }
 
   // Browser voices when the device has any; otherwise, or when the browser
@@ -188,6 +194,7 @@ var RobotVoice = (function() {
     clampRate: clampRate,
     watch: watch,
     speak: speak,
+    cancel: cancel,
     utterance: utterance
   };
 })();

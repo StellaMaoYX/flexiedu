@@ -850,7 +850,7 @@ function speakText(text) {
     window.speechSynthesis.speak(RobotVoice.utterance(text));
   };
   if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-    window.speechSynthesis.cancel();
+    RobotVoice.cancel();
     speakTimer = setTimeout(say, 250);
   } else {
     say();  // right away: iPad only allows speech started directly by a tap
