@@ -46,6 +46,23 @@
 
     #activityScreen { display: none; }
 
+    /* ── Lesson: design FLEXI's face (the face editor, embedded) ── */
+    #faceScreen {
+      display: none; flex-direction: column;
+      height: 100vh; padding: 14px 16px 16px; gap: 10px;
+    }
+    .face-step-head { text-align: center; }
+    .face-step-head .lesson-progress { margin-bottom: 4px; }
+    .face-step-title { font-size: 1.6rem; font-weight: bold; color: #222; }
+    .face-step-text  { font-size: 1.15rem; color: #333; margin-top: 4px; white-space: pre-wrap; }
+    .face-step-text:empty { display: none; }
+    #faceEditorFrame {
+      flex: 1; width: 100%; min-height: 0;
+      border: none; border-radius: 18px; background: #f0f4ff;
+      box-shadow: 0 6px 30px rgba(26,86,160,.12);
+    }
+    .face-step-foot { text-align: center; }
+
     /* ── Header ── */
     .activity-header {
       text-align: center;
@@ -457,6 +474,19 @@
       <img class="message-image" id="messageImage" alt="" style="display:none;">
       <div class="message-text" id="messageText"></div>
       <button class="fb-btn btn-continue" id="messageBtn" onclick="onMessageNext()">Next ➜</button>
+    </div>
+  </div>
+
+  <!-- Lesson: design FLEXI's face; FLEXI's face changes live as they edit -->
+  <div id="faceScreen">
+    <div class="face-step-head">
+      <div class="lesson-progress" id="faceProgress"></div>
+      <div class="face-step-title" id="faceTitle"></div>
+      <div class="face-step-text" id="faceText"></div>
+    </div>
+    <iframe id="faceEditorFrame" title="Face editor"></iframe>
+    <div class="face-step-foot">
+      <button class="fb-btn btn-continue" id="faceBtn" onclick="onFaceNext()">Next ➜</button>
     </div>
   </div>
 

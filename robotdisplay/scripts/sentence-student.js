@@ -9,7 +9,9 @@
  *   /robots/{id}/flexi/pushed – a single task pushed for a quick try; only
  *     shown while no lesson is running.
  * Task types: 'ordering' (drag-from-bank-to-slot), 'sorting'
- * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Missing/legacy
+ * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Lesson-only
+ * steps with nothing to check: 'intro' / 'reflection' (read, then Next) and
+ * 'face' (design FLEXI's face in the embedded face editor, then Next). Missing/legacy
  * activityType is treated as 'ordering'. With neither, the welcome screen shows.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -136,6 +138,16 @@ function onLessonChanged(data) {
     showOnly('messageScreen');
     const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
     speakText([title, step.instruction].filter(Boolean).join(' '));
+  } else if (step.activityType === 'face') {
+    currentActivity = null;
+    document.getElementById('faceProgress').textContent = progress;
+    document.getElementById('faceTitle').textContent = step.title || '';
+    document.getElementById('faceText').textContent  = step.instruction || '';
+    const isLast = lesson.current === lesson.steps.length - 1;
+    document.getElementById('faceBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
+    showOnly('faceScreen');
+    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
+    speakText([title, step.instruction].filter(Boolean).join(' '));
   } else {
     renderActivity(step);
     document.getElementById('activityProgress').textContent = progress;
@@ -159,6 +171,15 @@ function onMessageNext() {
   advanceLesson();
 }
 
+// Leaving the face step: save the face first if it has unsaved changes.
+function onFaceNext() {
+  try {
+    const editor = document.getElementById('faceEditorFrame').contentWindow;
+    if (editor.isDirty) editor.saveFace(true);
+  } catch (e) { /* editor not loaded */ }
+  onMessageNext();
+}
+
 // Count every check of a lesson task; mark it correct once it is.
 function recordLessonAttempt(isCorrect) {
   if (!lesson) return;
@@ -177,11 +198,19 @@ function shuffle(arr) {
 
 // Shows one of the top-level screens and hides the rest.
 function showOnly(screenId) {
-  ['waitingScreen', 'activityScreen', 'messageScreen', 'finishedScreen'].forEach(id => {
+  ['waitingScreen', 'activityScreen', 'messageScreen', 'faceScreen', 'finishedScreen'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = id !== screenId ? 'none' : (id === 'activityScreen' ? 'block' : 'flex');
   });
+  // The face editor only runs while its step is on screen
+  const frame = document.getElementById('faceEditorFrame');
+  const editorUrl = `face-editor.html?robot=${currentRobotId}&embedded=1`;
+  if (screenId === 'faceScreen') {
+    if (frame.getAttribute('src') !== editorUrl) frame.setAttribute('src', editorUrl);
+  } else if (frame.getAttribute('src')) {
+    frame.removeAttribute('src');
+  }
 }
 
 function showScreen(activityType) {

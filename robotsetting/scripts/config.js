@@ -8,15 +8,11 @@ function Config() {
     messagingSenderId: "441373455093"
   };
   
+  // One parameter's value from the page address, or null. Reads it on its
+  // own, so "?robot=3&embedded=1" gives robot "3" (not "3&embedded=1").
   Config.getURLParameter = function(paramName) {
-    var url = window.location.toString();
-    var urlParamIndex = url.indexOf(paramName+"=");
-    var paramValue = null;
-    if (urlParamIndex != -1) {
-      var valueIndex = urlParamIndex + paramName.length + 1;
-      paramValue = url.substring(valueIndex);
-      console.log(paramName + ":" + paramValue);
-    }
+    var paramValue = new URLSearchParams(window.location.search).get(paramName);
+    if (paramValue !== null) console.log(paramName + ":" + paramValue);
     return paramValue;
   }
 }

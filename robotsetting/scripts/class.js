@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * FLEXI Teacher Interface — Class editor
  * A Class is one lesson's content: a list of heterogeneous Tasks (ordering /
- * sorting / multiple-choice). All tasks are edited and pushed to the
+ * sorting / multiple-choice, intro / reflection messages, designing FLEXI's
+ * face). All tasks are edited and pushed to the
  * student's robot from this single page — selecting a different task in the
  * sidebar swaps which form is shown below, but "Push to Student" always
  * targets whichever task is currently selected.
@@ -56,8 +57,15 @@ const TASK_TYPES = [
     icon: '💭',
     description: 'A question for students to think and talk about, then tap Done.',
   },
+  {
+    key: 'face',
+    label: 'Design FLEXI\'s Face',
+    icon: '🎨',
+    description: 'Students design FLEXI\'s face on the belly screen; the face changes live and they can save it.',
+  },
 ];
 const MESSAGE_TYPES = ['intro', 'reflection'];  // no answer to check, just Next
+const NO_ANSWER_TYPES = MESSAGE_TYPES.concat(['face']);  // lesson-only, nothing to check
 const TASK_TYPE_META = {};
 TASK_TYPES.forEach(t => { TASK_TYPE_META[t.key] = t; });
 
@@ -265,6 +273,12 @@ function addTaskOfType(typeKey) {
     task = Object.assign(base, { title: 'Welcome!', image: null, successPhrase: '' });
   } else if (typeKey === 'reflection') {
     task = Object.assign(base, { title: 'Think about it', instruction: 'What comes first? What comes next?', image: null, successPhrase: '' });
+  } else if (typeKey === 'face') {
+    task = Object.assign(base, {
+      title: 'Design my face!',
+      instruction: 'Make a new face for me! Change my colours, eyes and mouth, then tap Save.',
+      successPhrase: '',
+    });
   } else {
     return;
   }
@@ -329,12 +343,14 @@ function loadTaskIntoEditor(i) {
   document.getElementById('edSuccess').value     = task.successPhrase || '';
 
   const isMessage = MESSAGE_TYPES.includes(task.taskType);
+  const noAnswer  = NO_ANSWER_TYPES.includes(task.taskType);
   document.getElementById('orderingBody').style.display = task.taskType === 'ordering'        ? 'block' : 'none';
   document.getElementById('sortingBody').style.display  = task.taskType === 'sorting'          ? 'block' : 'none';
   document.getElementById('mcBody').style.display        = task.taskType === 'multiple-choice' ? 'block' : 'none';
   document.getElementById('messageBody').style.display  = isMessage ? 'block' : 'none';
-  document.getElementById('successField').style.display = isMessage ? 'none'  : 'block';
-  document.getElementById('edInstructionLabel').textContent = isMessage
+  document.getElementById('faceBody').style.display     = task.taskType === 'face' ? 'block' : 'none';
+  document.getElementById('successField').style.display = noAnswer ? 'none'  : 'block';
+  document.getElementById('edInstructionLabel').textContent = noAnswer
     ? 'Text (students see this, FLEXI reads it aloud)' : 'Instruction (students see this)';
 
   if (isMessage) {
@@ -408,6 +424,8 @@ function saveCurrentTask() {
   } else if (MESSAGE_TYPES.includes(task.taskType)) {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.image       = document.getElementById('msgImgUrl').value.trim() || null;
+  } else if (task.taskType === 'face') {
+    task.instruction = document.getElementById('edInstruction').value.trim() || '';
   } else if (task.taskType === 'multiple-choice') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.multiSelect  = document.getElementById('mcMultiBtn').classList.contains('active');
@@ -491,6 +509,8 @@ function readTask() {
     });
   }
 
+  if (task.taskType === 'face') return Object.assign(shared, { activityType: 'face' });
+
   return null;
 }
 
@@ -505,6 +525,7 @@ function taskToStep(task) {
   if (MESSAGE_TYPES.includes(task.taskType)) {
     return Object.assign(step, { activityType: task.taskType, image: task.image || null });
   }
+  if (task.taskType === 'face') return Object.assign(step, { activityType: 'face' });
   if (task.taskType === 'sorting') {
     return Object.assign(step, { activityType: 'sorting', categories: task.categories || [], items: task.items || [] });
   }
@@ -525,6 +546,7 @@ function taskToStep(task) {
 function taskProblem(step) {
   const type = step.activityType;
   if (MESSAGE_TYPES.includes(type)) return step.instruction || step.image ? null : 'needs some text or a picture';
+  if (type === 'face') return null;  // the face editor needs no content
   if (type === 'sorting') {
     if (step.categories.length < 2) return 'needs at least 2 categories';
     if (step.items.length === 0) return 'needs at least one item';
@@ -998,8 +1020,8 @@ function pushToStudent() {
   const activity = readTask();
   if (!activity) return;
 
-  if (MESSAGE_TYPES.includes(activity.activityType)) {
-    showPushStatus('Introduction and reflection steps are shown during a lesson. Use Start Lesson.', 'error');
+  if (NO_ANSWER_TYPES.includes(activity.activityType)) {
+    showPushStatus('Introduction, reflection and face design steps are shown during a lesson. Use Start Lesson.', 'error');
     return;
   }
   if (activity.activityType === 'ordering') {
@@ -1172,7 +1194,7 @@ function listenForLesson() {
       playCorrectMotion();
     } else {
       const step = currentLessonStep();
-      if (step && !MESSAGE_TYPES.includes(step.activityType)) { startWaitingMotion(); showAnsweringState(); }
+      if (step && !NO_ANSWER_TYPES.includes(step.activityType)) { startWaitingMotion(); showAnsweringState(); }
       else { stopWaitingMotion(); clearMotionTimeouts(); }
     }
   });

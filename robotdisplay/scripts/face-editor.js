@@ -1,5 +1,7 @@
 var config = new Config();
 var currentRobot = Number(Config.getURLParameter('robot') || 0);
+// embedded=1: shown inside a lesson's face design step (sentence-student)
+if (Config.getURLParameter('embedded')) document.body.classList.add('embedded');
 var face = new Face();
 var db = new Database(config.config, initializeEdit);
 
