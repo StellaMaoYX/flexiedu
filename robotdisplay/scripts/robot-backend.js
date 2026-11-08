@@ -18,6 +18,7 @@ function RobotBackend(robotId, scale) {
   RobotBackend.initializeFace = function() {
     RobotBackend.face = new Face();
     RobotBackend.sound = new Sound();
+    RobotVoice.watch(RobotBackend.robotId, 'face');
     
     var dbRefState = firebase.database().ref(
       '/robots/' + RobotBackend.robotId + '/state/');

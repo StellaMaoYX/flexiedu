@@ -17,6 +17,11 @@
         "faces": {
           ".write": "auth != null && root.child('robots').child('0').child('devices').child(auth.uid).child('expiresAt').val() > now"
         },
+        "voiceOptions": {
+          "$role": {
+            ".write": "auth != null && root.child('robots').child('0').child('devices').child(auth.uid).child('role').val() == $role && root.child('robots').child('0').child('devices').child(auth.uid).child('expiresAt').val() > now"
+          }
+        },
         "devices": {
           "$uid": {
             ".validate": "newData.hasChildren(['role', 'expiresAt']) && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() <= now + 129600000 && (newData.child('role').val() == 'face' || newData.child('role').val() == 'belly')"
@@ -40,6 +45,11 @@
         },
         "faces": {
           ".write": "auth != null && root.child('robots').child($robotId).child('devices').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "voiceOptions": {
+          "$role": {
+            ".write": "auth != null && root.child('robots').child($robotId).child('devices').child(auth.uid).child('role').val() == $role && root.child('robots').child($robotId).child('devices').child(auth.uid).child('expiresAt').val() > now"
+          }
         },
         "devices": {
           "$uid": {

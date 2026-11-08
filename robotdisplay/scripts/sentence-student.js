@@ -44,6 +44,7 @@ const STUCK_PHRASE = "Uh-oh, I'm stuck. Let's try that again!";
 // ── Initialization ─────────────────────────────────────────────────────────
 function initStudent() {
   currentRobotId = Number(new URLSearchParams(window.location.search).get('robot') || 0);
+  RobotVoice.watch(currentRobotId, 'belly');
 
   firebase.database()
     .ref(`/robots/${currentRobotId}/flexi/pushed`)
@@ -64,7 +65,9 @@ function initStudent() {
       const data = snapshot.val();
       if (!data || data.timestamp <= lastCommandTs) return;
       lastCommandTs = data.timestamp;
-      handleCommand(data.type);
+      if (data.type !== 'say') handleCommand(data.type);
+      // teacher's voice test; not replayed when the screen reloads later
+      else if (Date.now() - data.timestamp < 30000) speakText(data.text || '');
     });
 }
 
@@ -843,11 +846,8 @@ function speakText(text) {
 
   clearTimeout(speakTimer);
   const say = () => {
-    const utt  = new SpeechSynthesisUtterance(text);
-    utt.lang   = 'en-US';
-    utt.rate   = 0.88;
-    utt.pitch  = 1.0;
-    window.speechSynthesis.speak(utt);
+    // voice and speed follow the teacher's setting (robot-voice.js)
+    window.speechSynthesis.speak(RobotVoice.utterance(text));
   };
   if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     window.speechSynthesis.cancel();

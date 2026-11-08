@@ -28,6 +28,7 @@ block content
             .voice
               input(type="text" class="large-text" name="speakText" id="speakText" x-webkit-speech)
               button(class="btn btn-success full-button" id="speak" onclick="speakPressed()") Speak
+            .mt-3.mb-3#voiceSettings
             .preset-controls#userAdded
         .card
           .card-header
@@ -77,4 +78,5 @@ block append scripts
   script(src="https://mayacakmak.github.io/emarsoftware/robotdisplay/scripts/belly.js")
   script(src="https://mayacakmak.github.io/emarsoftware/robotapijs/scripts/robotapi.js")
   script(src="scripts/facedata.js")
+  script(src="scripts/voice-settings.js")
   script(src="scripts/control.js")

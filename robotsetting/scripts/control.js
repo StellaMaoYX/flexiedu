@@ -21,6 +21,7 @@ function initializeControl() {
   Robot.initialize();
   face = new Face();
   belly = new Belly(currentRobot, 'small');
+  VoiceSettings.mount('voiceSettings', currentRobot);
 
   /* Register all database callbacks */
 

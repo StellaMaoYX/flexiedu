@@ -1076,6 +1076,8 @@ function initClass() {
         setRobotStatus(online);
       });
 
+    VoiceSettings.mount('voiceSettings', currentRobotId);
+
   } catch (e) {
     console.warn('Firebase unavailable — standalone mode:', e);
     setRobotStatus(false);
