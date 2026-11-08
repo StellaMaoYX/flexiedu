@@ -7,6 +7,9 @@
  *     has "Microsoft Clara Online (Natural)", Android Chrome has Google's), so
  *     the teacher's dropdown lists these instead of the teacher's own voices.
  * A chosen voice a screen doesn't have falls back to its automatic pick.
+ * Online voices (Edge's "Online (Natural)" ones, like Clara) need the
+ * internet: when one fails or doesn't start, the sentence is said again with
+ * the best voice installed on the device (e.g. Zira on Windows).
  * ═══════════════════════════════════════════════════════════════════════════ */
 var RobotVoice = (function() {
   var DEFAULT_RATE = 0.9;
@@ -15,6 +18,11 @@ var RobotVoice = (function() {
   var role = null;
   var isPairedDevice = false;
   var lastReport = '';
+
+  var ONLINE_START_TIMEOUT_MS = 4000;   // no sound by then: treat as failed
+  var ONLINE_RETRY_AFTER_MS = 60000;    // after a failure, stay local this long
+  var onlineFailedAt = 0;
+  var latestUtterance = null;
 
   // macOS joke and old formant voices: English, but nobody wants them.
   var NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Eddy|Flo|Fred|Good News|Grandma|Grandpa|Jester|Junior|Kathy|Organ|Ralph|Reed|Rocko|Sandy|Shelley|Superstar|Trinoids|Whisper|Wobble|Zarvox)\b/i;
@@ -46,25 +54,37 @@ var RobotVoice = (function() {
     return s;
   }
 
-  function automaticVoice() {
-    return englishVoices().sort(function(a, b) {
+  function onlineVoicesWork() {
+    return navigator.onLine !== false &&
+      Date.now() - onlineFailedAt > ONLINE_RETRY_AFTER_MS;
+  }
+
+  function usableVoices(localOnly) {
+    var online = !localOnly && onlineVoicesWork();
+    return englishVoices().filter(function(v) {
+      return v.localService || online;
+    });
+  }
+
+  function automaticVoice(localOnly) {
+    return usableVoices(localOnly).sort(function(a, b) {
       return naturalScore(b) - naturalScore(a);
     })[0] || null;
   }
 
-  function currentVoice() {
+  function currentVoice(localOnly) {
     if (settings.name) {
-      var chosen = englishVoices().filter(function(v) {
+      var chosen = usableVoices(localOnly).filter(function(v) {
         return v.name === settings.name;
       })[0];
       if (chosen) return chosen;
     }
-    return automaticVoice();
+    return automaticVoice(localOnly);
   }
 
-  function utterance(text) {
+  function utterance(text, localOnly) {
     var utt = new SpeechSynthesisUtterance(text);
-    var voice = currentVoice();
+    var voice = currentVoice(localOnly);
     if (voice) {
       utt.voice = voice;
       utt.lang = voice.lang;
@@ -72,7 +92,38 @@ var RobotVoice = (function() {
       utt.lang = 'en-US';
     }
     utt.rate = settings.rate;
+    latestUtterance = utt;
+    if (voice && !voice.localService) retryLocallyIfSilent(utt, text);
     return utt;
+  }
+
+  // An online voice can error out, or (offline in Edge) end or hang without
+  // a sound. Then cancel it and say the same sentence with a local voice.
+  function retryLocallyIfSilent(utt, text) {
+    var started = false;
+    var retried = false;
+    var timer = null;
+    function retry() {
+      // a newer sentence has taken over: leave it alone
+      if (started || retried || latestUtterance !== utt) return;
+      retried = true;
+      clearTimeout(timer);
+      onlineFailedAt = Date.now();
+      console.warn('Online voice failed, using a voice on this device');
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance(text, true));
+    }
+    utt.addEventListener('start', function() {
+      started = true;
+      clearTimeout(timer);
+    });
+    utt.addEventListener('end', retry);
+    utt.addEventListener('error', function(e) {
+      // interrupted/canceled: a newer sentence replaced this one;
+      // not-allowed: no voice may speak yet, a local one won't either
+      if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1) retry();
+    });
+    timer = setTimeout(retry, ONLINE_START_TIMEOUT_MS);
   }
 
   // Browser voices when the device has any; otherwise, or when the browser
