@@ -4,8 +4,8 @@
  * The robot's face phone and belly tablet open this page instead of signing
  * in with a teacher account. The device signs in anonymously and shows a
  * short-lived code (+ QR). The teacher confirms it on robotsetting/
- * connect.html, which adds this device to /robots/{id}/devices/{uid} until
- * midnight and writes the robot id back to /pairing/{code}/robot. The device
+ * connect.html, which adds this device to /robots/{id}/devices/{uid} for 36
+ * hours and writes the robot id back to /pairing/{code}/robot. The device
  * then remembers {robot, role} and opens its screen.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -50,7 +50,7 @@ function onSignedIn(uid) {
   started = true;
   deviceUid = uid;
 
-  // Still paired from earlier today? Go straight to the screen.
+  // Still paired from before (within 36 hours)? Go straight to the screen.
   var saved = storageGet(PAIRING_KEY);
   if (saved && saved.robot != null && SCREEN_PAGES[saved.role]) {
     firebase.database().ref('robots/' + saved.robot + '/devices/' + deviceUid + '/expiresAt').once('value')

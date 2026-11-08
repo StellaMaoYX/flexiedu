@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * Keeps a paired robot screen (face phone / belly tablet) on its robot only
- * while the pairing is valid. When /robots/{id}/devices/{uid} expires at
- * midnight or the teacher disconnects it, the device goes back to pair.html
- * to show a new code. Pages opened by a signed-in teacher are left alone.
+ * while the pairing is valid. When /robots/{id}/devices/{uid} expires (36
+ * hours after connecting) or the teacher disconnects it, the device goes
+ * back to pair.html to show a new code. Pages opened by a signed-in teacher are left alone.
  * Robot 0 (the public Test Robot) still works without pairing.
  * ═══════════════════════════════════════════════════════════════════════════ */
 (function() {

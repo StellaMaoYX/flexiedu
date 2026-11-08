@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * FLEXI Teacher Interface — Class editor
  * A Class is one lesson's content: a list of heterogeneous Tasks (ordering /
- * sorting / multiple-choice, intro / reflection messages, designing FLEXI's
- * face). All tasks are edited and pushed to the
+ * sorting / multiple-choice, intro / reflection messages, designing a scene
+ * such as a playground, designing FLEXI's face). All tasks are edited and pushed to the
  * student's robot from this single page — selecting a different task in the
  * sidebar swaps which form is shown below, but "Push to Student" always
  * targets whichever task is currently selected.
@@ -58,6 +58,12 @@ const TASK_TYPES = [
     description: 'A question for students to think and talk about, then tap Done.',
   },
   {
+    key: 'scene',
+    label: 'Design a Scene',
+    icon: '🏞️',
+    description: 'Students drag pictures onto a background (e.g. design a playground) and can draw with their finger.',
+  },
+  {
     key: 'face',
     label: 'Design FLEXI\'s Face',
     icon: '🎨',
@@ -65,7 +71,7 @@ const TASK_TYPES = [
   },
 ];
 const MESSAGE_TYPES = ['intro', 'reflection'];  // no answer to check, just Next
-const NO_ANSWER_TYPES = MESSAGE_TYPES.concat(['face']);  // lesson-only, nothing to check
+const NO_ANSWER_TYPES = MESSAGE_TYPES.concat(['scene', 'face']);  // lesson-only, nothing to check
 const TASK_TYPE_META = {};
 TASK_TYPES.forEach(t => { TASK_TYPE_META[t.key] = t; });
 
@@ -254,7 +260,7 @@ function addTaskOfType(typeKey) {
   if (!meta) return;
   saveCurrentTask();
 
-  const base = { id: genId(), taskType: typeKey, title: 'New ' + meta.label + ' Task', instruction: '', successPhrase: 'Great job!' };
+  const base = { id: genId(), taskType: typeKey, title: 'New ' + meta.label + ' Task', instruction: '', successPhrase: 'Great job!', imageSize: 'large' };
   let task;
   if (typeKey === 'ordering') {
     task = Object.assign(base, { level: 'sentence', instruction: DEFAULT_INSTRUCTION.sentence, items: [], targetWord: null });
@@ -273,6 +279,15 @@ function addTaskOfType(typeKey) {
     task = Object.assign(base, { title: 'Welcome!', image: null, successPhrase: '' });
   } else if (typeKey === 'reflection') {
     task = Object.assign(base, { title: 'Think about it', instruction: 'What comes first? What comes next?', image: null, successPhrase: '' });
+  } else if (typeKey === 'scene') {
+    task = Object.assign(base, {
+      title: 'Design a playground!',
+      instruction: 'Drag the pictures to build your playground. You can draw too!',
+      successPhrase: '',
+      background: null,
+      stickers: [],
+      allowDrawing: true,
+    });
   } else if (typeKey === 'face') {
     task = Object.assign(base, {
       title: 'Design my face!',
@@ -333,6 +348,21 @@ function hideEmptyEditorState() {
   document.getElementById('editorEmptyState').style.display = 'none';
 }
 
+// ── Picture size on the robot (Normal / Large / Extra large) ────────────────
+let editorPictureSize = 'normal';
+
+function setEditorPictureSize(size) {
+  editorPictureSize = size;
+  updatePictureSizeButtons();
+  saveCurrentTask();
+}
+
+function updatePictureSizeButtons() {
+  document.querySelectorAll('#pictureSizeBtns .level-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.size === editorPictureSize);
+  });
+}
+
 // ── Editor: load / save the selected task ───────────────────────────────────
 function loadTaskIntoEditor(i) {
   const task = tasks[i];
@@ -350,6 +380,10 @@ function loadTaskIntoEditor(i) {
   document.getElementById('mcBody').style.display        = task.taskType === 'multiple-choice' ? 'block' : 'none';
   document.getElementById('messageBody').style.display  = isMessage ? 'block' : 'none';
   document.getElementById('faceBody').style.display     = task.taskType === 'face' ? 'block' : 'none';
+  document.getElementById('sceneBody').style.display    = task.taskType === 'scene' ? 'block' : 'none';
+  document.getElementById('pictureSizeField').style.display = task.taskType === 'face' ? 'none' : 'block';
+  editorPictureSize = task.imageSize || 'normal';
+  updatePictureSizeButtons();
   document.getElementById('successField').style.display = noAnswer ? 'none'  : 'block';
   document.getElementById('edInstructionLabel').textContent = noAnswer
     ? 'Text (students see this, FLEXI reads it aloud)' : 'Instruction (students see this)';
@@ -363,6 +397,15 @@ function loadTaskIntoEditor(i) {
   }
 
   if (task.taskType === 'face') document.getElementById('faceKeep').checked = !!task.keepFace;
+  if (task.taskType === 'scene') {
+    const bg = task.background || '';
+    document.getElementById('sceneBgUrl').value = bg;
+    const bgPreview = document.getElementById('sceneBgPreview');
+    bgPreview.style.display = bg ? 'block' : 'none';
+    bgPreview.innerHTML     = bg ? `<img src="${esc(bg)}" style="max-height:70px;border-radius:6px;border:1px solid #dde;">` : '';
+    document.getElementById('sceneDrawing').checked = task.allowDrawing !== false;
+    renderSceneStickers(task.stickers || []);
+  }
 
   if (task.taskType === 'ordering') {
     languageLevel = task.level || 'sentence';
@@ -397,6 +440,7 @@ function saveCurrentTask() {
   if (!task) return;
   task.title         = document.getElementById('edTitle').value.trim()   || 'Untitled Task';
   task.successPhrase = document.getElementById('edSuccess').value.trim() || '';
+  task.imageSize     = editorPictureSize;
 
   if (task.taskType === 'ordering') {
     task.level = languageLevel;
@@ -430,6 +474,8 @@ function saveCurrentTask() {
   } else if (task.taskType === 'face') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.keepFace    = document.getElementById('faceKeep').checked;
+  } else if (task.taskType === 'scene') {
+    Object.assign(task, { instruction: document.getElementById('edInstruction').value.trim() || '' }, readSceneFields());
   } else if (task.taskType === 'multiple-choice') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.multiSelect  = document.getElementById('mcMultiBtn').classList.contains('active');
@@ -460,6 +506,7 @@ function readTask() {
     title:         document.getElementById('edTitle').value.trim()       || 'Untitled Task',
     instruction:   document.getElementById('edInstruction').value.trim() || '',
     successPhrase: document.getElementById('edSuccess').value.trim()     || 'Great job!',
+    imageSize:     editorPictureSize,
     timestamp:     Date.now(),
   };
 
@@ -517,6 +564,8 @@ function readTask() {
     return Object.assign(shared, { activityType: 'face', keepFace: document.getElementById('faceKeep').checked });
   }
 
+  if (task.taskType === 'scene') return Object.assign(shared, { activityType: 'scene' }, readSceneFields());
+
   return null;
 }
 
@@ -527,11 +576,18 @@ function taskToStep(task) {
     title:         task.title || 'Untitled Task',
     instruction:   task.instruction || '',
     successPhrase: task.successPhrase || 'Great job!',
+    imageSize:     task.imageSize || 'normal',
   };
   if (MESSAGE_TYPES.includes(task.taskType)) {
     return Object.assign(step, { activityType: task.taskType, image: task.image || null });
   }
   if (task.taskType === 'face') return Object.assign(step, { activityType: 'face', keepFace: !!task.keepFace });
+  if (task.taskType === 'scene') {
+    return Object.assign(step, {
+      activityType: 'scene', background: task.background || null,
+      stickers: task.stickers || [], allowDrawing: task.allowDrawing !== false,
+    });
+  }
   if (task.taskType === 'sorting') {
     return Object.assign(step, { activityType: 'sorting', categories: task.categories || [], items: task.items || [] });
   }
@@ -553,6 +609,7 @@ function taskProblem(step) {
   const type = step.activityType;
   if (MESSAGE_TYPES.includes(type)) return step.instruction || step.image ? null : 'needs some text or a picture';
   if (type === 'face') return null;  // the face editor needs no content
+  if (type === 'scene') return step.stickers.length || step.allowDrawing ? null : 'needs pictures to place, or drawing turned on';
   if (type === 'sorting') {
     if (step.categories.length < 2) return 'needs at least 2 categories';
     if (step.items.length === 0) return 'needs at least one item';
@@ -950,6 +1007,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const msgUrl     = document.getElementById('msgImgUrl');
   const msgPreview = document.getElementById('msgImgPreview');
   if (msgUrl && msgPreview) wireManualUrlPreview(msgUrl, msgPreview);
+  const sceneBg = document.getElementById('sceneBgUrl');
+  const sceneBgPreview = document.getElementById('sceneBgPreview');
+  if (sceneBg && sceneBgPreview) wireManualUrlPreview(sceneBg, sceneBgPreview);
 });
 
 function buildMcOptionRow(opt) {
@@ -993,6 +1053,74 @@ function buildMcOptionRow(opt) {
   return row;
 }
 
+// ── Design a scene: background and pictures to place ───────────────────────
+function readSceneFields() {
+  const rows = document.querySelectorAll('#sceneStickers .editor-item');
+  return {
+    background:   document.getElementById('sceneBgUrl').value.trim() || null,
+    stickers:     Array.from(rows).map(row => ({
+      image: row.querySelector('.scene-img').value.trim(),
+      name:  row.querySelector('.scene-name').value.trim(),
+    })).filter(s => s.image),
+    allowDrawing: document.getElementById('sceneDrawing').checked,
+  };
+}
+
+function buildSceneStickerRow(sticker) {
+  const row = document.createElement('div');
+  row.className = 'editor-item';
+  const imgUrl = sticker.image || '';
+  row.innerHTML = `
+    <div class="item-fields">
+      <input class="item-text-input scene-name" type="text" placeholder="Name (optional, e.g. Slide)" value="${esc(sticker.name || '')}">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input class="item-img-input scene-img" type="url" placeholder="Picture URL — or upload ▶" value="${esc(imgUrl)}" style="flex:1;">
+        <label style="${UPLOAD_LABEL_STYLE}" title="Upload image from computer">
+          📤 Upload
+          <input type="file" accept="image/*" style="display:none" onchange="uploadSceneStickerImage(this)">
+        </label>
+      </div>
+      <div class="item-img-preview" style="display:${imgUrl ? 'block' : 'none'};margin-top:4px;">
+        ${imgUrl ? `<img src="${esc(imgUrl)}" style="max-height:56px;border-radius:6px;border:1px solid #dde;">` : ''}
+      </div>
+    </div>
+    <button class="item-remove" onclick="removeSceneSticker(this)" title="Remove">&#10005;</button>`;
+  wireManualUrlPreview(row.querySelector('.scene-img'), row.querySelector('.item-img-preview'));
+  return row;
+}
+
+function renderSceneStickers(stickers) {
+  const container = document.getElementById('sceneStickers');
+  container.innerHTML = '';
+  stickers.forEach(s => container.appendChild(buildSceneStickerRow(s)));
+}
+
+function addSceneSticker() {
+  document.getElementById('sceneStickers').appendChild(buildSceneStickerRow({}));
+}
+
+function removeSceneSticker(btn) {
+  btn.closest('.editor-item').remove();
+  saveCurrentTask();
+}
+
+function uploadSceneStickerImage(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  const row = fileInput.closest('.editor-item');
+  cloudinaryUpload(file, row.querySelector('.scene-img'), row.querySelector('.item-img-preview'),
+    fileInput.parentElement, () => saveCurrentTask());
+  fileInput.value = '';
+}
+
+function uploadSceneBackground(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  cloudinaryUpload(file, document.getElementById('sceneBgUrl'), document.getElementById('sceneBgPreview'),
+    fileInput.parentElement, () => saveCurrentTask());
+  fileInput.value = '';
+}
+
 function renderMcOptions(options) {
   const container = document.getElementById('mcOptions');
   container.innerHTML = '';
@@ -1027,7 +1155,7 @@ function pushToStudent() {
   if (!activity) return;
 
   if (NO_ANSWER_TYPES.includes(activity.activityType)) {
-    showPushStatus('Introduction, reflection and face design steps are shown during a lesson. Use Start Lesson.', 'error');
+    showPushStatus('Introduction, reflection, scene and face design steps are shown during a lesson. Use Start Lesson.', 'error');
     return;
   }
   if (activity.activityType === 'ordering') {

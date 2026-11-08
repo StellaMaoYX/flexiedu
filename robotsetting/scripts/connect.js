@@ -2,7 +2,7 @@
  * Connect Robot Screens (teacher side of device pairing, see
  * robotdisplay/scripts/pair.js). The teacher enters (or arrives via QR with)
  * the code a robot screen shows; confirming adds that device to
- * /robots/{id}/devices/{uid} until midnight and tells the device which robot
+ * /robots/{id}/devices/{uid} for 36 hours and tells the device which robot
  * it now belongs to. The first connection of the day also resets the robot to
  * its defaults (welcome screen, default face, no old lesson or results), so
  * every class starts fresh. The access check in database.js has already
@@ -10,6 +10,10 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 var CODE_LIFETIME_MS = 10 * 60 * 1000;
+// How long a connected screen stays connected. The database rules allow at
+// most 36 hours from the server's clock; ten minutes less leaves room for a
+// teacher's computer clock that runs a little fast.
+var PAIRING_LIFETIME_MS = 36 * 60 * 60 * 1000 - 10 * 60 * 1000;
 var ROLE_NAMES = { face: 'Face', belly: 'Belly' };
 
 var urlParams = new URLSearchParams(window.location.search);
@@ -21,13 +25,6 @@ function setMessage(text, kind) {
   var el = document.getElementById('connectMsg');
   el.textContent = text;
   el.className = 'msg ' + (kind || '');
-}
-
-// Midnight tonight, in the teacher's own time zone.
-function endOfToday() {
-  var d = new Date();
-  d.setHours(24, 0, 0, 0);
-  return d.getTime();
 }
 
 function startOfToday() {
@@ -114,7 +111,7 @@ function connectDevice() {
     updates['robots/' + currentRobot + '/devices/' + request.uid] = {
       role: request.role,
       pairedAt: firebase.database.ServerValue.TIMESTAMP,
-      expiresAt: endOfToday()
+      expiresAt: Date.now() + PAIRING_LIFETIME_MS
     };
     updates['pairing/' + code + '/robot'] = String(currentRobot);
     return resetRobotIfNewDay(currentRobot)
@@ -146,7 +143,7 @@ function watchDevices() {
       return devices[uid] && devices[uid].expiresAt > Date.now();
     });
     if (uids.length === 0) {
-      list.innerHTML = '<span class="empty">No screens connected today.</span>';
+      list.innerHTML = '<span class="empty">No screens connected.</span>';
       return;
     }
     list.innerHTML = '';
@@ -158,9 +155,10 @@ function watchDevices() {
       var info = document.createElement('div');
       info.innerHTML = '<b></b><small></small>';
       info.querySelector('b').textContent = (ROLE_NAMES[d.role] || d.role) + ' screen';
-      info.querySelector('small').textContent = d.pairedAt
-        ? 'Connected at ' + new Date(d.pairedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-        : '';
+      var when = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
+      info.querySelector('small').textContent =
+        (d.pairedAt ? 'Connected ' + new Date(d.pairedAt).toLocaleString([], when) + ' · ' : '') +
+        'until ' + new Date(d.expiresAt).toLocaleString([], when);
       var btn = document.createElement('button');
       btn.className = 'btn-sm';
       btn.textContent = 'Disconnect';

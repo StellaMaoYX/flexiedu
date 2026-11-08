@@ -499,6 +499,15 @@
           <label class="field-label" id="edInstructionLabel">Instruction (students see this)</label>
           <input class="field-input" type="text" id="edInstruction" placeholder="e.g. Put these steps in the correct order!">
 
+          <div id="pictureSizeField">
+            <label class="field-label">Picture size on the robot</label>
+            <div class="level-btns" style="margin-bottom:12px;" id="pictureSizeBtns">
+              <button class="level-btn" data-size="normal" onclick="setEditorPictureSize('normal')">Normal</button>
+              <button class="level-btn" data-size="large"  onclick="setEditorPictureSize('large')">Large</button>
+              <button class="level-btn" data-size="xlarge" onclick="setEditorPictureSize('xlarge')">Extra large</button>
+            </div>
+          </div>
+
           <!-- ═══ Ordering body ═══ -->
           <div id="orderingBody" style="display:none;">
             <div class="level-btns" style="margin-bottom:12px;" id="editorLevelTabs">
@@ -579,6 +588,29 @@
             </div>
             <div class="item-img-preview" id="msgImgPreview" style="display:none;margin:-6px 0 12px;"></div>
             <p class="hint-note">Students read this on the belly screen and FLEXI reads it aloud. They tap Next to continue.</p>
+          </div>
+
+          <!-- ═══ Design a scene body ═══ -->
+          <div id="sceneBody" style="display:none;">
+            <label class="field-label">Background picture (optional)</label>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;">
+              <input class="item-img-input" type="url" id="sceneBgUrl" placeholder="e.g. an empty park — image URL, or upload ▶" style="flex:1;">
+              <label style="cursor:pointer;white-space:nowrap;padding:6px 10px;background:#1a56a0;color:white;border-radius:7px;font-size:0.8rem;flex-shrink:0;" title="Upload image from computer">
+                &#128228; Upload
+                <input type="file" accept="image/*" style="display:none" onchange="uploadSceneBackground(this)">
+              </label>
+            </div>
+            <div class="item-img-preview" id="sceneBgPreview" style="display:none;margin:-6px 0 12px;"></div>
+
+            <label class="field-label">Pictures students can place (each can be used many times)</label>
+            <div class="items-list" id="sceneStickers"></div>
+            <button class="add-item-btn" onclick="addSceneSticker()">&#43; Add Picture</button>
+
+            <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:0.9rem;cursor:pointer;">
+              <input type="checkbox" id="sceneDrawing" checked onchange="saveCurrentTask()">
+              Students can also draw with their finger
+            </label>
+            <p class="hint-note">On the belly screen students drag the pictures onto the background, move them around, make them bigger or smaller, and draw. There's no right answer — they tap Next when they're done, and their scene is kept in the lesson results.</p>
           </div>
 
           <!-- ═══ Design FLEXI's face body ═══ -->

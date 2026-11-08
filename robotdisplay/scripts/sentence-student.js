@@ -10,8 +10,10 @@
  *     shown while no lesson is running.
  * Task types: 'ordering' (drag-from-bank-to-slot), 'sorting'
  * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Lesson-only
- * steps with nothing to check: 'intro' / 'reflection' (read, then Next) and
- * 'face' (design FLEXI's face in the embedded face maker, then Next). Missing/legacy
+ * steps with nothing to check: 'intro' / 'reflection' (read, then Next),
+ * 'scene' (drag pictures onto a scene and draw, e.g. design a playground;
+ * see scene-builder.js) and 'face' (design FLEXI's face in the embedded
+ * face maker, then Next). Missing/legacy
  * activityType is treated as 'ordering'. With neither, the welcome screen shows.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -80,6 +82,7 @@ function initStudent() {
 // Starts the right activity for a task payload (pushed task or lesson step).
 function renderActivity(data) {
   const type = data.activityType || 'ordering';
+  setPictureSize(data.imageSize);
   if (type === 'multiple-choice') {
     if (!data.options || !data.options.length) return;
     startMultipleChoice(data);
@@ -92,6 +95,12 @@ function renderActivity(data) {
     const rawItems = Array.isArray(data.items) ? data.items : Object.values(data.items);
     if (rawItems.length > 0) startOrdering(Object.assign({}, data, { items: rawItems }));
   }
+}
+
+// The teacher's picture size for a task: 'normal' (default), 'large' or
+// 'xlarge' (as big as the screen allows); see body[data-pictures] styles.
+function setPictureSize(size) {
+  document.body.dataset.pictures = size === 'large' || size === 'xlarge' ? size : 'normal';
 }
 
 // ── Lesson ──────────────────────────────────────────────────────────────────
@@ -131,12 +140,27 @@ function onLessonChanged(data) {
     document.getElementById('messageProgress').textContent = progress;
     document.getElementById('messageTitle').textContent = step.title || '';
     document.getElementById('messageText').textContent  = step.instruction || '';
+    setPictureSize(step.imageSize);
     const img = document.getElementById('messageImage');
     img.style.display = step.image ? '' : 'none';
     if (step.image) img.src = step.image; else img.removeAttribute('src');
     const isLast = lesson.current === lesson.steps.length - 1;
     document.getElementById('messageBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
     showOnly('messageScreen');
+    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
+    speakText([title, step.instruction].filter(Boolean).join(' '));
+  } else if (step.activityType === 'scene') {
+    currentActivity = null;
+    document.getElementById('sceneProgress').textContent = progress;
+    document.getElementById('sceneTitle').textContent = step.title || '';
+    document.getElementById('sceneText').textContent  = step.instruction || '';
+    const isLast = lesson.current === lesson.steps.length - 1;
+    document.getElementById('sceneBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
+    showOnly('sceneScreen');
+    // carry on with the scene saved for this step, if the screen reloaded
+    const saved = lesson.results && lesson.results[lesson.current] && lesson.results[lesson.current].scene;
+    const stepIndex = lesson.current;
+    SceneBuilder.open(step, saved, scene => lessonRef('results/' + stepIndex + '/scene').set(scene));
     const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
     speakText([title, step.instruction].filter(Boolean).join(' '));
   } else if (step.activityType === 'face') {
@@ -200,6 +224,15 @@ function restoreFaceAfterLesson() {
     .set(lesson.faceBefore === 'none' ? null : lesson.faceBefore);
 }
 
+// Leaving the scene step: keep the finished scene with the step's result.
+function onSceneNext() {
+  if (!lesson) return;
+  lessonRef('results/' + lesson.current).update({
+    done: true, completedAt: Date.now(), scene: SceneBuilder.getState(),
+  });
+  advanceLesson();
+}
+
 // Leaving the face step: save the face first if it has unsaved changes.
 function onFaceNext() {
   try {
@@ -227,11 +260,12 @@ function shuffle(arr) {
 
 // Shows one of the top-level screens and hides the rest.
 function showOnly(screenId) {
-  ['waitingScreen', 'activityScreen', 'messageScreen', 'faceScreen', 'finishedScreen'].forEach(id => {
+  ['waitingScreen', 'activityScreen', 'messageScreen', 'sceneScreen', 'faceScreen', 'finishedScreen'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = id !== screenId ? 'none' : (id === 'activityScreen' ? 'block' : 'flex');
   });
+  if (screenId !== 'sceneScreen') SceneBuilder.close();
   // The face maker only runs while its step is on screen (see openFaceMaker)
   const frame = document.getElementById('faceEditorFrame');
   if (screenId !== 'faceScreen' && frame.getAttribute('src')) frame.removeAttribute('src');

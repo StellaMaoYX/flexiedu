@@ -46,6 +46,53 @@
 
     #activityScreen { display: none; }
 
+    /* ── Lesson: design a scene (scene-builder.js) ── */
+    #sceneScreen {
+      display: none; flex-direction: column;
+      height: 100vh; padding: 12px 16px 14px; gap: 8px;
+    }
+    .scene-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+    .scene-tools .gap { width: 14px; }
+    .tool-btn {
+      padding: 10px 16px; border: 3px solid #dde3f0; border-radius: 14px; background: white;
+      font: bold 1.05rem Arial, Helvetica, sans-serif; color: #1a56a0; cursor: pointer;
+    }
+    .tool-btn.active { border-color: #1a56a0; background: #e8f0ff; }
+    #scenePalette, #sceneSelection, #sceneDrawTools { display: flex; align-items: center; gap: 8px; }
+    .pen-colour { width: 38px; height: 38px; border-radius: 50%; border: 3px solid #dde3f0; cursor: pointer; }
+    .pen-colour.selected { border-color: #1a56a0; transform: scale(1.15); }
+    #sceneWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+    #scene {
+      position: relative; overflow: hidden; border-radius: 18px; touch-action: none;
+      box-shadow: 0 6px 30px rgba(26,86,160,.15);
+    }
+    #sceneBg {
+      position: absolute; inset: 0; background: linear-gradient(#bfe3ff, #e8f6ff 60%, #b9e6a5 60%);
+      background-size: cover; background-position: center;
+    }
+    #sceneStickers { position: absolute; inset: 0; pointer-events: none; }
+    .scene-sticker {
+      position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
+      touch-action: none; user-select: none; -webkit-user-drag: none; cursor: grab;
+    }
+    .scene-sticker.selected { outline: 4px dashed #1a56a0; outline-offset: 4px; border-radius: 6px; }
+    #sceneCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+    #sceneTray {
+      display: flex; gap: 10px; overflow-x: auto; justify-content: center;
+      background: white; border-radius: 16px; padding: 8px;
+    }
+    .tray-item {
+      flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      border: 3px solid #dde3f0; border-radius: 14px; background: #f7f9ff; padding: 6px;
+      touch-action: none; cursor: grab; font: bold 0.85rem Arial, Helvetica, sans-serif; color: #333;
+    }
+    .tray-item img { height: 76px; max-width: 120px; object-fit: contain; pointer-events: none; }
+    .tray-item span:empty { display: none; }
+    .sticker-ghost {
+      position: fixed; transform: translate(-50%, -50%); pointer-events: none;
+      z-index: 2000; opacity: 0.85;
+    }
+
     /* ── Lesson: design FLEXI's face (face-maker.html, embedded) ── */
     #faceScreen {
       display: none; flex-direction: column;
@@ -413,6 +460,30 @@
     .mc-option:hover { border-color: #9dbcf5; background: #f7f9ff; }
     .mc-option.selected { border-color: #1a56a0; background: #eef4ff; }
     .mc-option img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+
+    /* ── Picture size the teacher picked for the task (body[data-pictures]) ── */
+    body[data-pictures="large"] .slot-img,
+    body[data-pictures="large"] .bubble-img          { width: 96px;  height: 96px;  border-radius: 12px; }
+    body[data-pictures="large"] .sort-chip img       { width: 72px;  height: 72px;  border-radius: 10px; }
+    body[data-pictures="large"] .sort-bin-label img  { width: 88px;  height: 88px;  border-radius: 12px; }
+    body[data-pictures="large"] .mc-option img       { width: 110px; height: 110px; border-radius: 12px; }
+    body[data-pictures="large"] .mc-question img     { max-width: 420px; max-height: 38vh; }
+    body[data-pictures="large"] .message-image       { max-height: 50vh; }
+
+    body[data-pictures="xlarge"] .slot-img,
+    body[data-pictures="xlarge"] .bubble-img         { width: 160px; height: 160px; border-radius: 16px; }
+    body[data-pictures="xlarge"] .sort-chip img      { width: 120px; height: 120px; border-radius: 14px; }
+    body[data-pictures="xlarge"] .sort-bin-label img { width: 130px; height: 130px; border-radius: 16px; }
+    body[data-pictures="xlarge"] .mc-option img      { width: 170px; height: 170px; border-radius: 16px; }
+    body[data-pictures="xlarge"] .mc-question img    { max-width: 92%; max-height: 52vh; object-fit: contain; }
+    body[data-pictures="xlarge"] .message-image      { max-height: 64vh; }
+    body[data-pictures="xlarge"] .message-card       { max-width: 960px; }
+    body[data-pictures="xlarge"] .answer-zone,
+    body[data-pictures="xlarge"] .word-bank,
+    body[data-pictures="xlarge"] .sort-bins          { max-width: 1300px; }
+    body[data-pictures="xlarge"] .sort-bin           { max-width: 440px; }
+    body[data-pictures="xlarge"] .mc-question,
+    body[data-pictures="xlarge"] .mc-options         { max-width: 1100px; }
     .mc-check {
       width: 24px; height: 24px;
       border: 2px solid #9dbcf5;
@@ -474,6 +545,41 @@
       <img class="message-image" id="messageImage" alt="" style="display:none;">
       <div class="message-text" id="messageText"></div>
       <button class="fb-btn btn-continue" id="messageBtn" onclick="onMessageNext()">Next ➜</button>
+    </div>
+  </div>
+
+  <!-- Lesson: design a scene (e.g. a playground); see scene-builder.js -->
+  <div id="sceneScreen">
+    <div class="face-step-head">
+      <div class="lesson-progress" id="sceneProgress"></div>
+      <div class="face-step-title" id="sceneTitle"></div>
+      <div class="face-step-text" id="sceneText"></div>
+    </div>
+    <div class="scene-tools">
+      <button type="button" class="tool-btn active" id="sceneMoveBtn">✋ Move</button>
+      <span id="sceneDrawTools">
+        <button type="button" class="tool-btn" id="sceneDrawBtn">✏️ Draw</button>
+        <span id="scenePalette" style="display:none;"></span>
+        <button type="button" class="tool-btn" id="sceneUndoBtn">↶ Undo</button>
+        <button type="button" class="tool-btn" id="sceneClearBtn">🧽 Clear</button>
+      </span>
+      <span id="sceneSelection" style="display:none;">
+        <span class="gap"></span>
+        <button type="button" class="tool-btn" id="sceneSmallerBtn">➖ Smaller</button>
+        <button type="button" class="tool-btn" id="sceneBiggerBtn">➕ Bigger</button>
+        <button type="button" class="tool-btn" id="sceneRemoveBtn">🗑 Remove</button>
+      </span>
+    </div>
+    <div id="sceneWrap">
+      <div id="scene">
+        <div id="sceneBg"></div>
+        <div id="sceneStickers"></div>
+        <canvas id="sceneCanvas"></canvas>
+      </div>
+    </div>
+    <div id="sceneTray"></div>
+    <div class="face-step-foot">
+      <button class="fb-btn btn-continue" id="sceneBtn" onclick="onSceneNext()">Next ➜</button>
     </div>
   </div>
 
@@ -555,6 +661,7 @@
   <script src="scripts/config.js"></script>
   <script src="../databasejs/scripts/database.js"></script>
   <script src="scripts/robot-voice.js"></script>
+  <script src="scripts/scene-builder.js"></script>
   <script src="scripts/sentence-student.js"></script>
   <script src="scripts/kiosk.js" data-frame-only></script>
 </body>
