@@ -27,7 +27,6 @@ var VoiceSettings = (function() {
     '.vs-last { margin-top: 12px; padding: 8px 10px; background: #f6f8fc; border-radius: 8px; font-size: 0.78rem; color: #555; line-height: 1.45; }' +
     '.vs-last:empty { display: none; }' +
     '.vs-last b { color: #333; }' +
-    '.vs-last .vs-warn { color: #b4532a; }' +
     '.vs-last .vs-events { color: #999; }';
 
   function esc(s) {
@@ -128,17 +127,24 @@ var VoiceSettings = (function() {
       select.innerHTML = html;
       select.value = saved.name;
 
-      if (!screenCount)
+      if (!screenCount) {
         hint.textContent = 'Turn on the robot\'s screens to see the voices they have.';
-      else if (!saved.name)
+      } else if (!saved.name) {
         hint.textContent = 'Now using ' + automatic.join(' and ') + '.';
-      else
-        hint.textContent = 'A screen that doesn\'t have this voice uses its most natural one.';
+      } else {
+        // Say per screen what it will really use: the chosen voice, or its
+        // own automatic pick when it doesn't have that voice.
+        hint.textContent = 'Now using ' + Object.keys(options).map(function(screen) {
+          var has = voices[saved.name] && voices[saved.name].screens.indexOf(screen) !== -1;
+          return (has ? saved.name : options[screen].automatic + ' (it doesn\'t have ' + saved.name + ')') +
+            ' on the ' + SCREEN_NAMES[screen];
+        }).join(' and ') + '.';
+      }
       renderLastSpoken();
     }
 
-    // What each screen really said last, with which voice – shows when a
-    // chosen voice didn't work there and the screen switched to another.
+    // What each screen really said last, with which voice and what the
+    // browser reported – explains a voice that sounds wrong or stays silent.
     function renderLastSpoken() {
       var html = '';
       Object.keys(options).forEach(function(screen) {
@@ -147,8 +153,6 @@ var VoiceSettings = (function() {
         html += '<div><b>' + esc(SCREEN_NAMES[screen].replace(/^./, function(c) { return c.toUpperCase(); })) +
           '</b> last said “' + esc(spoken.text) + '” with <b>' + esc(spoken.voice) + '</b>' +
           (spoken.at ? ' at ' + new Date(spoken.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + '.';
-        if (spoken.switchedFrom)
-          html += '<br><span class="vs-warn">Switched from ' + esc(spoken.switchedFrom) + '.</span>';
         if (spoken.events)
           html += '<br><span class="vs-events">' + esc(spoken.events) + '</span>';
         html += '</div>';

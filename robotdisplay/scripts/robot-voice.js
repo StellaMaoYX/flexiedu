@@ -4,13 +4,13 @@
  *     means "the most natural-sounding English voice this device has".
  *   /robots/{id}/voiceOptions/{face|belly} – the English voices each paired
  *     screen really has, and lastSpoken: which voice it really used for its
- *     last sentence and what happened (start/end/error, a switch of voice). Voices differ by device and browser (Edge on Windows
- *     has "Microsoft Clara Online (Natural)", Android Chrome has Google's), so
- *     the teacher's dropdown lists these instead of the teacher's own voices.
+ *     last sentence and what the browser reported (start/end/error). Voices
+ *     differ by device and browser (Edge on Windows has "Microsoft Clara
+ *     Online (Natural)", Chrome has Google's), so the teacher's dropdown
+ *     lists these instead of the teacher's own voices.
  * A chosen voice a screen doesn't have falls back to its automatic pick.
- * Online voices (Edge's "Online (Natural)" ones, like Clara) need the
- * internet: when one clearly fails, the sentence is said again with
- * the best voice installed on the device (e.g. Zira on Windows).
+ * Each sentence is said once with one voice: there is no switching to
+ * another voice when an online one (like Clara) fails without internet.
  * ═══════════════════════════════════════════════════════════════════════════ */
 var RobotVoice = (function() {
   var DEFAULT_RATE = 0.9;
@@ -20,10 +20,6 @@ var RobotVoice = (function() {
   var isPairedDevice = false;
   var lastReport = '';
 
-  var FAILED_END_MS = 400;              // "ended" sooner than this: nothing was said
-  var ONLINE_RETRY_AFTER_MS = 60000;    // after a failure, stay local this long
-  var onlineFailedAt = 0;
-  var latestUtterance = null;
 
   // macOS joke and old formant voices: English, but nobody wants them.
   var NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Eddy|Flo|Fred|Good News|Grandma|Grandpa|Jester|Junior|Kathy|Organ|Ralph|Reed|Rocko|Sandy|Shelley|Superstar|Trinoids|Whisper|Wobble|Zarvox)\b/i;
@@ -55,37 +51,25 @@ var RobotVoice = (function() {
     return s;
   }
 
-  function onlineVoicesWork() {
-    return navigator.onLine !== false &&
-      Date.now() - onlineFailedAt > ONLINE_RETRY_AFTER_MS;
-  }
-
-  function usableVoices(localOnly) {
-    var online = !localOnly && onlineVoicesWork();
-    return englishVoices().filter(function(v) {
-      return v.localService || online;
-    });
-  }
-
-  function automaticVoice(localOnly) {
-    return usableVoices(localOnly).sort(function(a, b) {
+  function automaticVoice() {
+    return englishVoices().sort(function(a, b) {
       return naturalScore(b) - naturalScore(a);
     })[0] || null;
   }
 
-  function currentVoice(localOnly) {
+  function currentVoice() {
     if (settings.name) {
-      var chosen = usableVoices(localOnly).filter(function(v) {
+      var chosen = englishVoices().filter(function(v) {
         return v.name === settings.name;
       })[0];
       if (chosen) return chosen;
     }
-    return automaticVoice(localOnly);
+    return automaticVoice();
   }
 
-  function utterance(text, localOnly, switchedFrom) {
+  function utterance(text) {
     var utt = new SpeechSynthesisUtterance(text);
-    var voice = currentVoice(localOnly);
+    var voice = currentVoice();
     if (voice) {
       utt.voice = voice;
       utt.lang = voice.lang;
@@ -93,15 +77,13 @@ var RobotVoice = (function() {
       utt.lang = 'en-US';
     }
     utt.rate = settings.rate;
-    latestUtterance = utt;
-    noteWhatHappens(utt, voice, switchedFrom);
-    if (voice && !voice.localService) retryLocallyIfSilent(utt, text);
+    noteWhatHappens(utt, voice);
     return utt;
   }
 
   // Tell the teacher's page what this screen really said, with which voice,
   // and the events the browser sent – so "it sounds wrong" can be explained.
-  function noteWhatHappens(utt, voice, switchedFrom) {
+  function noteWhatHappens(utt, voice) {
     if (!isPairedDevice || !role) return;
     var createdAt = Date.now();
     var events = [];
@@ -111,7 +93,6 @@ var RobotVoice = (function() {
         text: utt.text.slice(0, 80),
         voice: voice ? voice.name : '(browser default)',
         online: !!(voice && !voice.localService),
-        switchedFrom: switchedFrom || '',
         events: events.join(', '),
         at: firebase.database.ServerValue.TIMESTAMP
       }).catch(function() {});
@@ -121,38 +102,8 @@ var RobotVoice = (function() {
     utt.addEventListener('error', function(e) { add('error:' + e.error); save(); });
   }
 
-  // An online voice can fail without the internet: it reports an error, or
-  // "ends" at once without a sound. Then say the same sentence again with a
-  // local voice. Only clear failures count – a slow start or a missing
-  // 'start' event is not one, or the sentence would be said twice.
-  function retryLocallyIfSilent(utt, text) {
-    var createdAt = Date.now();
-    var started = false;
-    var retried = false;
-    function retry(reason) {
-      // stopped on purpose, or a newer sentence has taken over: leave it
-      if (started || retried || latestUtterance !== utt) return;
-      retried = true;
-      onlineFailedAt = Date.now();
-      console.warn('Online voice failed (' + reason + '), using a voice on this device');
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance(text, true, utt.voice.name + ' – ' + reason));
-    }
-    utt.addEventListener('start', function() { started = true; });
-    utt.addEventListener('boundary', function() { started = true; });
-    utt.addEventListener('end', function() {
-      if (Date.now() - createdAt < FAILED_END_MS) retry('ended without a sound');
-    });
-    utt.addEventListener('error', function(e) {
-      // interrupted/canceled: a newer sentence replaced this one;
-      // not-allowed: no voice may speak yet, a local one won't either
-      if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1) retry('error: ' + e.error);
-    });
-  }
-
-  // Stop whatever is being said, without it counting as a failed voice.
+  // Stop whatever is being said.
   function cancel() {
-    latestUtterance = null;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }
 
