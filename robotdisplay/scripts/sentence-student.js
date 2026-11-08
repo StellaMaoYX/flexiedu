@@ -11,7 +11,7 @@
  * Task types: 'ordering' (drag-from-bank-to-slot), 'sorting'
  * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Lesson-only
  * steps with nothing to check: 'intro' / 'reflection' (read, then Next) and
- * 'face' (design FLEXI's face in the embedded face editor, then Next). Missing/legacy
+ * 'face' (design FLEXI's face in the embedded face maker, then Next). Missing/legacy
  * activityType is treated as 'ordering'. With neither, the welcome screen shows.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -118,6 +118,7 @@ function onLessonChanged(data) {
 
   if (lesson.status === 'finished' || lesson.current >= lesson.steps.length) {
     currentActivity = null;
+    restoreFaceAfterLesson();
     showOnly('finishedScreen');
     speakText('Great work! You finished the lesson.');
     return;
@@ -146,6 +147,7 @@ function onLessonChanged(data) {
     const isLast = lesson.current === lesson.steps.length - 1;
     document.getElementById('faceBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
     showOnly('faceScreen');
+    openFaceMaker();
     const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
     speakText([title, step.instruction].filter(Boolean).join(' '));
   } else {
@@ -169,6 +171,33 @@ function onMessageNext() {
   if (!lesson) return;
   lessonRef('results/' + lesson.current).set({ done: true, completedAt: Date.now() });
   advanceLesson();
+}
+
+// The face maker for this lesson step. The key lets it find the face the
+// student already saved here if the screen reloads. Before it changes
+// FLEXI's face, remember the face FLEXI had (once per lesson) so it can be
+// put back afterwards.
+function openFaceMaker() {
+  const frame = document.getElementById('faceEditorFrame');
+  const url = `face-maker.html?robot=${currentRobotId}&key=${lesson.startedAt}-${lesson.current}`;
+  if (frame.getAttribute('src') === url) return;
+  const open = () => frame.setAttribute('src', url);
+  if (lesson.faceBefore !== undefined) return open();
+  firebase.database().ref(`/robots/${currentRobotId}/flexi/customFace`).once('value')
+    .then(snap => lessonRef('faceBefore').set(snap.val() || 'none'))
+    .catch(e => console.warn('Could not remember FLEXI\'s face:', e))
+    .then(open);
+}
+
+// After the lesson, FLEXI gets its earlier face back – unless the teacher
+// ticked "keep the student's face". The teacher's page does the same when
+// the lesson is restarted or ended early.
+function restoreFaceAfterLesson() {
+  if (!lesson || lesson.faceBefore === undefined || lesson.faceRestored) return;
+  lessonRef('faceRestored').set(true);
+  if (lesson.steps.some(s => s.activityType === 'face' && s.keepFace)) return;
+  firebase.database().ref(`/robots/${currentRobotId}/flexi/customFace`)
+    .set(lesson.faceBefore === 'none' ? null : lesson.faceBefore);
 }
 
 // Leaving the face step: save the face first if it has unsaved changes.
@@ -203,14 +232,9 @@ function showOnly(screenId) {
     if (!el) return;
     el.style.display = id !== screenId ? 'none' : (id === 'activityScreen' ? 'block' : 'flex');
   });
-  // The face editor only runs while its step is on screen
+  // The face maker only runs while its step is on screen (see openFaceMaker)
   const frame = document.getElementById('faceEditorFrame');
-  const editorUrl = `face-editor.html?robot=${currentRobotId}&embedded=1`;
-  if (screenId === 'faceScreen') {
-    if (frame.getAttribute('src') !== editorUrl) frame.setAttribute('src', editorUrl);
-  } else if (frame.getAttribute('src')) {
-    frame.removeAttribute('src');
-  }
+  if (screenId !== 'faceScreen' && frame.getAttribute('src')) frame.removeAttribute('src');
 }
 
 function showScreen(activityType) {

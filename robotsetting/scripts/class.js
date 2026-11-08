@@ -278,6 +278,7 @@ function addTaskOfType(typeKey) {
       title: 'Design my face!',
       instruction: 'Make a new face for me! Change my colours, eyes and mouth, then tap Save.',
       successPhrase: '',
+      keepFace: false,
     });
   } else {
     return;
@@ -361,6 +362,8 @@ function loadTaskIntoEditor(i) {
     preview.innerHTML     = img ? `<img src="${esc(img)}" style="max-height:70px;border-radius:6px;border:1px solid #dde;">` : '';
   }
 
+  if (task.taskType === 'face') document.getElementById('faceKeep').checked = !!task.keepFace;
+
   if (task.taskType === 'ordering') {
     languageLevel = task.level || 'sentence';
     const isWord = languageLevel === 'word';
@@ -426,6 +429,7 @@ function saveCurrentTask() {
     task.image       = document.getElementById('msgImgUrl').value.trim() || null;
   } else if (task.taskType === 'face') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
+    task.keepFace    = document.getElementById('faceKeep').checked;
   } else if (task.taskType === 'multiple-choice') {
     task.instruction = document.getElementById('edInstruction').value.trim() || '';
     task.multiSelect  = document.getElementById('mcMultiBtn').classList.contains('active');
@@ -509,7 +513,9 @@ function readTask() {
     });
   }
 
-  if (task.taskType === 'face') return Object.assign(shared, { activityType: 'face' });
+  if (task.taskType === 'face') {
+    return Object.assign(shared, { activityType: 'face', keepFace: document.getElementById('faceKeep').checked });
+  }
 
   return null;
 }
@@ -525,7 +531,7 @@ function taskToStep(task) {
   if (MESSAGE_TYPES.includes(task.taskType)) {
     return Object.assign(step, { activityType: task.taskType, image: task.image || null });
   }
-  if (task.taskType === 'face') return Object.assign(step, { activityType: 'face' });
+  if (task.taskType === 'face') return Object.assign(step, { activityType: 'face', keepFace: !!task.keepFace });
   if (task.taskType === 'sorting') {
     return Object.assign(step, { activityType: 'sorting', categories: task.categories || [], items: task.items || [] });
   }
@@ -1146,7 +1152,7 @@ function startLesson() {
       !confirm('A lesson is already running on this robot. Start this one from the beginning instead?')) return;
 
   const now = Date.now();
-  firebase.database().ref(`/robots/${currentRobotId}/flexi`).update({
+  firebase.database().ref(`/robots/${currentRobotId}/flexi`).update(Object.assign({
     lesson: {
       id: classId || null,
       title: document.getElementById('topbarTitle').textContent.replace(/^🏫\s*/, '') || 'Lesson',
@@ -1155,7 +1161,7 @@ function startLesson() {
     pushed: null,
     result: null,
     bellyMode: 'activity',
-  })
+  }, faceRestoreUpdates(lesson)))
     .then(() => setLessonStatus('✓ Lesson started!', 'ok'))
     .catch(e => setLessonStatus('Could not start the lesson: ' + e.message, 'error'));
 }
@@ -1169,11 +1175,21 @@ function skipLessonStep() {
   lessonRef().update(updates);
 }
 
+// FLEXI's face from before the lesson's face design step (saved by the belly
+// as lesson.faceBefore), to put back when the lesson is restarted or ended –
+// unless the teacher chose to keep the student's face, or it's back already.
+function faceRestoreUpdates(oldLesson) {
+  if (!oldLesson || oldLesson.faceBefore === undefined || oldLesson.faceRestored) return {};
+  if ((oldLesson.steps || []).some(s => s.activityType === 'face' && s.keepFace)) return {};
+  return { customFace: oldLesson.faceBefore === 'none' ? null : oldLesson.faceBefore };
+}
+
 // Back to the welcome screen.
 function endLesson() {
   if (!confirm('End the lesson? The robot goes back to its welcome screen.')) return;
   firebase.database().ref(`/robots/${currentRobotId}/flexi`)
-    .update({ lesson: null, pushed: null, result: null, command: null, studentStatus: null })
+    .update(Object.assign({ lesson: null, pushed: null, result: null, command: null, studentStatus: null },
+                          faceRestoreUpdates(lesson)))
     .then(() => { setLessonStatus('Lesson ended.', 'ok'); stopWaitingMotion(); clearMotionTimeouts(); });
 }
 
