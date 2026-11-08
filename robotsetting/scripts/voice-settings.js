@@ -27,6 +27,7 @@ var VoiceSettings = (function() {
     '.vs-last { margin-top: 12px; padding: 8px 10px; background: #f6f8fc; border-radius: 8px; font-size: 0.78rem; color: #555; line-height: 1.45; }' +
     '.vs-last:empty { display: none; }' +
     '.vs-last b { color: #333; }' +
+    '.vs-last .vs-warn { color: #b4532a; }' +
     '.vs-last .vs-events { color: #999; }';
 
   function esc(s) {
@@ -153,6 +154,8 @@ var VoiceSettings = (function() {
         html += '<div><b>' + esc(SCREEN_NAMES[screen].replace(/^./, function(c) { return c.toUpperCase(); })) +
           '</b> last said “' + esc(spoken.text) + '” with <b>' + esc(spoken.voice) + '</b>' +
           (spoken.at ? ' at ' + new Date(spoken.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + '.';
+        if (spoken.switchedFrom)
+          html += '<br><span class="vs-warn">No internet voice: switched from ' + esc(spoken.switchedFrom) + '.</span>';
         if (spoken.events)
           html += '<br><span class="vs-events">' + esc(spoken.events) + '</span>';
         html += '</div>';

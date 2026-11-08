@@ -9,8 +9,11 @@
  *     Online (Natural)", Chrome has Google's), so the teacher's dropdown
  *     lists these instead of the teacher's own voices.
  * A chosen voice a screen doesn't have falls back to its automatic pick.
- * Each sentence is said once with one voice: there is no switching to
- * another voice when an online one (like Clara) fails without internet.
+ * Online voices (like Clara) need the internet. Without it the device's own
+ * voice is used (e.g. Zira on Windows): picked up front when the device knows
+ * it's offline, or as a single retry when an online voice clearly fails
+ * before saying anything. A sentence is never heard twice: the failed one is
+ * stopped first, a late error doesn't count, and a newer sentence wins.
  * ═══════════════════════════════════════════════════════════════════════════ */
 var RobotVoice = (function() {
   var DEFAULT_RATE = 0.9;
@@ -19,6 +22,12 @@ var RobotVoice = (function() {
   var role = null;
   var isPairedDevice = false;
   var lastReport = '';
+
+  var FAILED_END_MS = 400;              // "ended" sooner than this: nothing was said
+  var FAILED_ERROR_MS = 1500;           // a later error may come after speech was heard
+  var ONLINE_RETRY_AFTER_MS = 60000;    // after a failure, use local voices this long
+  var onlineFailedAt = 0;
+  var latestUtterance = null;           // the sentence that should be heard now
 
   // macOS joke and old formant voices: English, but nobody wants them.
   var NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Eddy|Flo|Fred|Good News|Grandma|Grandpa|Jester|Junior|Kathy|Organ|Ralph|Reed|Rocko|Sandy|Shelley|Superstar|Trinoids|Whisper|Wobble|Zarvox)\b/i;
@@ -50,25 +59,37 @@ var RobotVoice = (function() {
     return s;
   }
 
-  function automaticVoice() {
-    return englishVoices().sort(function(a, b) {
+  function onlineVoicesWork() {
+    return navigator.onLine !== false &&
+      Date.now() - onlineFailedAt > ONLINE_RETRY_AFTER_MS;
+  }
+
+  function usableVoices(localOnly) {
+    var online = !localOnly && onlineVoicesWork();
+    return englishVoices().filter(function(v) {
+      return v.localService || online;
+    });
+  }
+
+  function automaticVoice(localOnly) {
+    return usableVoices(localOnly).sort(function(a, b) {
       return naturalScore(b) - naturalScore(a);
     })[0] || null;
   }
 
-  function currentVoice() {
+  function currentVoice(localOnly) {
     if (settings.name) {
-      var chosen = englishVoices().filter(function(v) {
+      var chosen = usableVoices(localOnly).filter(function(v) {
         return v.name === settings.name;
       })[0];
       if (chosen) return chosen;
     }
-    return automaticVoice();
+    return automaticVoice(localOnly);
   }
 
-  function utterance(text) {
+  function utterance(text, localOnly, switchedFrom) {
     var utt = new SpeechSynthesisUtterance(text);
-    var voice = currentVoice();
+    var voice = currentVoice(localOnly);
     if (voice) {
       utt.voice = voice;
       utt.lang = voice.lang;
@@ -76,13 +97,45 @@ var RobotVoice = (function() {
       utt.lang = 'en-US';
     }
     utt.rate = settings.rate;
-    noteWhatHappens(utt, voice);
+    latestUtterance = utt;
+    noteWhatHappens(utt, voice, switchedFrom);
+    if (voice && !voice.localService) retryLocallyIfSilent(utt, text);
     return utt;
+  }
+
+  // When an online voice clearly fails before saying anything (an early
+  // error, or "ending" at once), stop it and say the sentence once with a
+  // local voice. Anything less clear is left alone, so nothing overlaps.
+  function retryLocallyIfSilent(utt, text) {
+    var createdAt = Date.now();
+    var started = false;
+    var retried = false;
+    function retry(reason) {
+      // it spoke, already retried, or a newer sentence has taken over
+      if (started || retried || latestUtterance !== utt) return;
+      retried = true;
+      onlineFailedAt = Date.now();
+      console.warn('Online voice failed (' + reason + '), using a voice on this device');
+      window.speechSynthesis.cancel();
+      var local = utterance(text, true, utt.voice.name + ' – ' + reason);
+      if (local.voice && local.voice.localService) window.speechSynthesis.speak(local);
+    }
+    utt.addEventListener('start', function() { started = true; });
+    utt.addEventListener('boundary', function() { started = true; });
+    utt.addEventListener('end', function() {
+      if (Date.now() - createdAt < FAILED_END_MS) retry('ended without a sound');
+    });
+    utt.addEventListener('error', function(e) {
+      // interrupted/canceled: a newer sentence replaced this one;
+      // not-allowed: needs a tap first (the page asks for it), not a new voice
+      if (['interrupted', 'canceled', 'not-allowed'].indexOf(e.error) === -1 &&
+          Date.now() - createdAt < FAILED_ERROR_MS) retry('error: ' + e.error);
+    });
   }
 
   // Tell the teacher's page what this screen really said, with which voice,
   // and the events the browser sent – so "it sounds wrong" can be explained.
-  function noteWhatHappens(utt, voice) {
+  function noteWhatHappens(utt, voice, switchedFrom) {
     if (!isPairedDevice || !role) return;
     var createdAt = Date.now();
     var events = [];
@@ -92,6 +145,7 @@ var RobotVoice = (function() {
         text: utt.text.slice(0, 80),
         voice: voice ? voice.name : '(browser default)',
         online: !!(voice && !voice.localService),
+        switchedFrom: switchedFrom || '',
         events: events.join(', '),
         at: firebase.database.ServerValue.TIMESTAMP
       }).catch(function() {});
@@ -101,8 +155,9 @@ var RobotVoice = (function() {
     utt.addEventListener('error', function(e) { add('error:' + e.error); save(); });
   }
 
-  // Stop whatever is being said.
+  // Stop whatever is being said; it doesn't count as a failed voice.
   function cancel() {
+    latestUtterance = null;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }
 
