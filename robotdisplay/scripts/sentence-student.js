@@ -18,6 +18,7 @@ let currentActivity   = null;
 let currentRobotId    = null;
 let feedbackIsCorrect = false;
 let lastCommandTs     = 0;
+let commandsSeen      = false;  // the first /flexi/command snapshot has arrived
 
 // Lesson state
 let lesson            = null;  // /flexi/lesson while one is running or finished
@@ -63,11 +64,14 @@ function initStudent() {
     .ref(`/robots/${currentRobotId}/flexi/command`)
     .on('value', snapshot => {
       const data = snapshot.val();
+      const alreadyThere = !commandsSeen;  // sent before this screen opened
+      commandsSeen = true;
       if (!data || data.timestamp <= lastCommandTs) return;
       lastCommandTs = data.timestamp;
       if (data.type !== 'say') handleCommand(data.type);
-      // teacher's voice test; not replayed when the screen reloads later
-      else if (Date.now() - data.timestamp < 30000) speakText(data.text || '');
+      // the teacher's voice test: only one sent while this screen is open,
+      // not an old one replayed when it reloads (no clocks to compare)
+      else if (!alreadyThere) speakText(data.text || '');
     });
 }
 

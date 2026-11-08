@@ -20,7 +20,6 @@ var RobotVoice = (function() {
   var isPairedDevice = false;
   var lastReport = '';
 
-
   // macOS joke and old formant voices: English, but nobody wants them.
   var NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Eddy|Flo|Fred|Good News|Grandma|Grandpa|Jester|Junior|Kathy|Organ|Ralph|Reed|Rocko|Sandy|Shelley|Superstar|Trinoids|Whisper|Wobble|Zarvox)\b/i;
 

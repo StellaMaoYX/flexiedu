@@ -70,8 +70,6 @@ const DEFAULT_INSTRUCTION = {
   paragraph: 'Put these paragraphs in the correct order!',
 };
 
-const STUCK_PHRASE = "Uh-oh, I'm stuck. Let's try that again!";
-
 // ── State ──────────────────────────────────────────────────────────────────
 let currentRobotId = null;
 let currentUid      = null;
@@ -1394,19 +1392,12 @@ function handleStudentResult(isCorrect) {
   if (!activity) return;
 
   if (isCorrect) {
+    // The belly says the success / stuck phrase itself (sentence-student.js)
     updateResultBox(true, activity.successPhrase || '');
-    robotSpeak(activity.successPhrase || 'Wonderful! You did it!');
     playCorrectMotion();
   } else {
     updateResultBox(false);
-    robotSpeak(STUCK_PHRASE);
     playStuckMotion();
-  }
-}
-
-function robotSpeak(text) {
-  if (robotConnected) {
-    try { Robot._requestRobotAction('speak', { text }); } catch (e) { /* standalone */ }
   }
 }
 
