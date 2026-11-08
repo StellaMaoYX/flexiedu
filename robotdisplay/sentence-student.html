@@ -6,6 +6,8 @@
   <title>Sentence Ordering Activity</title>
   <style>
     * { box-sizing: border-box; }
+    /* teacher page live preview: look only, no taps */
+    body.preview { pointer-events: none; }
     body {
       background: #eef2ff;
       font-family: Arial, Helvetica, sans-serif;
@@ -600,7 +602,7 @@
   <div id="finishedScreen" class="center-screen" style="display:none;">
     <div class="wait-icon">🎉</div>
     <div class="wait-title">Great work!</div>
-    <div class="wait-msg">You finished the lesson.</div>
+    <div class="wait-msg" id="finishedMsg">You finished the lesson.</div>
   </div>
 
   <div id="activityScreen">

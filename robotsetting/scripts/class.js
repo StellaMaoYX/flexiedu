@@ -71,7 +71,7 @@ const TASK_TYPES = [
   },
 ];
 const MESSAGE_TYPES = ['intro', 'reflection'];  // no answer to check, just Next
-const NO_ANSWER_TYPES = MESSAGE_TYPES.concat(['scene', 'face']);  // lesson-only, nothing to check
+const NO_ANSWER_TYPES = MESSAGE_TYPES.concat(['scene', 'face']);  // nothing to check, just Next/Done
 const TASK_TYPE_META = {};
 TASK_TYPES.forEach(t => { TASK_TYPE_META[t.key] = t; });
 
@@ -1154,8 +1154,10 @@ function pushToStudent() {
   const activity = readTask();
   if (!activity) return;
 
-  if (NO_ANSWER_TYPES.includes(activity.activityType)) {
-    showPushStatus('Introduction, reflection, scene and face design steps are shown during a lesson. Use Start Lesson.', 'error');
+  // The face step changes FLEXI's real face; only a lesson puts the old one
+  // back afterwards, so it can't be pushed on its own.
+  if (activity.activityType === 'face') {
+    showPushStatus('Design FLEXI\'s Face only runs in a lesson, so FLEXI gets its own face back afterwards. Use Start Lesson.', 'error');
     return;
   }
   if (activity.activityType === 'ordering') {
@@ -1176,11 +1178,28 @@ function pushToStudent() {
     firebase.database()
       .ref(`/robots/${currentRobotId}/flexi`)
       .update({ pushed: Object.assign({}, activity, { _pushedAt: Date.now() }), lesson: null, bellyMode: 'activity' })
-      .then(() => { showPushStatus('✓ Pushed to student screen!', 'ok'); startWaitingMotion(); showAnsweringState(); })
+      .then(() => {
+        showPushStatus('✓ Pushed to student screen!', 'ok');
+        if (NO_ANSWER_TYPES.includes(activity.activityType)) { stopWaitingMotion(); clearMotionTimeouts(); }
+        else { startWaitingMotion(); showAnsweringState(); }
+      })
       .catch(e => showPushStatus('Firebase error: ' + e.message, 'error'));
   } catch (e) {
     showPushStatus('Firebase unavailable — check your connection.', 'error');
   }
+}
+
+// ── Live preview of the student screen ────────────────────────────────────
+// The belly page in its look-only mode (?preview=1: no speech, taps or
+// writes), laid out at the tablet's size and scaled to the card's width.
+function initStudentPreview() {
+  const box   = document.getElementById('studentPreview');
+  const frame = document.getElementById('studentPreviewFrame');
+  frame.src = `../robotdisplay/sentence-student.html?robot=${currentRobotId}&preview=1`;
+  const fit = () => { frame.style.transform = `scale(${box.clientWidth / 1200})`; };
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(box);
+  else window.addEventListener('resize', fit);
 }
 
 function showPushStatus(msg, type) {
@@ -1237,11 +1256,7 @@ function initClass() {
     setRobotStatus(false);
   }
 
-  const base = window.location.href.replace(/\/robotsetting\/.*$/, '');
-  const studentUrl = `${base}/robotdisplay/robot-belly.html?robot=${currentRobotId}`;
-  const linkEl = document.getElementById('studentLink');
-  linkEl.href        = studentUrl;
-  linkEl.textContent = studentUrl;
+  initStudentPreview();
 
   loadClassFromStorage();
   listenForResults();

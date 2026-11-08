@@ -7,7 +7,8 @@
  *     steps just need "Next"/"Done". Progress (current, results) is written
  *     back so the teacher's class page can follow along.
  *   /robots/{id}/flexi/pushed – a single task pushed for a quick try; only
- *     shown while no lesson is running.
+ *     shown while no lesson is running. Intro/reflection and scene steps can
+ *     be pushed too (Done shows "All done!"); the face step is lesson-only.
  * Task types: 'ordering' (drag-from-bank-to-slot), 'sorting'
  * (drag-from-bank-to-bin), 'multiple-choice' (tap options). Lesson-only
  * steps with nothing to check: 'intro' / 'reflection' (read, then Next),
@@ -15,6 +16,10 @@
  * see scene-builder.js) and 'face' (design FLEXI's face in the embedded
  * face maker, then Next). Missing/legacy
  * activityType is treated as 'ordering'. With neither, the welcome screen shows.
+ *
+ * ?preview=1 – the live preview on the teacher's class page: it only
+ * watches (no speech, no taps, no Firebase writes, no face maker) and mirrors
+ * the student's scene as it is saved.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Shared state ─────────────────────────────────────────────────────────
@@ -29,6 +34,7 @@ let lesson            = null;  // /flexi/lesson while one is running or finished
 let renderedStepKey   = null;  // "<current>:<stepStartedAt>" of the step on screen
 let lastPushed        = null;  // last single pushed task, shown when no lesson
 let advancing         = false;
+const PREVIEW = new URLSearchParams(window.location.search).get('preview') === '1';
 
 // Ordering state
 let slots = [];   // array of N: null or item object
@@ -49,7 +55,8 @@ const STUCK_PHRASE = "Uh-oh, I'm stuck. Let's try that again!";
 // ── Initialization ─────────────────────────────────────────────────────────
 function initStudent() {
   currentRobotId = Number(new URLSearchParams(window.location.search).get('robot') || 0);
-  RobotVoice.watch(currentRobotId, 'belly');
+  if (PREVIEW) document.body.classList.add('preview');
+  else RobotVoice.watch(currentRobotId, 'belly');
 
   firebase.database()
     .ref(`/robots/${currentRobotId}/flexi/pushed`)
@@ -83,7 +90,9 @@ function initStudent() {
 function renderActivity(data) {
   const type = data.activityType || 'ordering';
   setPictureSize(data.imageSize);
-  if (type === 'multiple-choice') {
+  if (type === 'intro' || type === 'reflection' || type === 'scene') {
+    showNoAnswerStep(data, '', 'Done ✓', null, null);  // pushed on its own
+  } else if (type === 'multiple-choice') {
     if (!data.options || !data.options.length) return;
     startMultipleChoice(data);
   } else if (type === 'sorting') {
@@ -121,13 +130,17 @@ function onLessonChanged(data) {
 
   // Result/attempt writes also change the lesson; only re-render on a new step.
   const key = lesson.status + ':' + lesson.current + ':' + lesson.stepStartedAt;
-  if (key === renderedStepKey) return;
+  if (key === renderedStepKey) {
+    if (PREVIEW) mirrorScene();
+    return;
+  }
   renderedStepKey = key;
   hideFeedback();
 
   if (lesson.status === 'finished' || lesson.current >= lesson.steps.length) {
     currentActivity = null;
     restoreFaceAfterLesson();
+    document.getElementById('finishedMsg').textContent = 'You finished the lesson.';
     showOnly('finishedScreen');
     speakText('Great work! You finished the lesson.');
     return;
@@ -135,50 +148,58 @@ function onLessonChanged(data) {
 
   const step = lesson.steps[lesson.current];
   const progress = 'Step ' + (lesson.current + 1) + ' of ' + lesson.steps.length;
-  if (step.activityType === 'intro' || step.activityType === 'reflection') {
-    currentActivity = null;
-    document.getElementById('messageProgress').textContent = progress;
-    document.getElementById('messageTitle').textContent = step.title || '';
-    document.getElementById('messageText').textContent  = step.instruction || '';
-    setPictureSize(step.imageSize);
-    const img = document.getElementById('messageImage');
-    img.style.display = step.image ? '' : 'none';
-    if (step.image) img.src = step.image; else img.removeAttribute('src');
-    const isLast = lesson.current === lesson.steps.length - 1;
-    document.getElementById('messageBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
-    showOnly('messageScreen');
-    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
-    speakText([title, step.instruction].filter(Boolean).join(' '));
-  } else if (step.activityType === 'scene') {
-    currentActivity = null;
-    document.getElementById('sceneProgress').textContent = progress;
-    document.getElementById('sceneTitle').textContent = step.title || '';
-    document.getElementById('sceneText').textContent  = step.instruction || '';
-    const isLast = lesson.current === lesson.steps.length - 1;
-    document.getElementById('sceneBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
-    showOnly('sceneScreen');
+  const isLast = lesson.current === lesson.steps.length - 1;
+  if (['intro', 'reflection', 'scene', 'face'].includes(step.activityType)) {
     // carry on with the scene saved for this step, if the screen reloaded
     const saved = lesson.results && lesson.results[lesson.current] && lesson.results[lesson.current].scene;
     const stepIndex = lesson.current;
-    SceneBuilder.open(step, saved, scene => lessonRef('results/' + stepIndex + '/scene').set(scene));
-    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
-    speakText([title, step.instruction].filter(Boolean).join(' '));
-  } else if (step.activityType === 'face') {
-    currentActivity = null;
-    document.getElementById('faceProgress').textContent = progress;
-    document.getElementById('faceTitle').textContent = step.title || '';
-    document.getElementById('faceText').textContent  = step.instruction || '';
-    const isLast = lesson.current === lesson.steps.length - 1;
-    document.getElementById('faceBtn').textContent = isLast ? 'Done ✓' : 'Next ➜';
-    showOnly('faceScreen');
-    openFaceMaker();
-    const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
-    speakText([title, step.instruction].filter(Boolean).join(' '));
+    showNoAnswerStep(step, progress, isLast ? 'Done ✓' : 'Next ➜', saved,
+      scene => lessonRef('results/' + stepIndex + '/scene').set(scene));
   } else {
     renderActivity(step);
     document.getElementById('activityProgress').textContent = progress;
     speakText(step.instruction || step.title);
   }
+}
+
+// An intro/reflection, scene or face step: read it (FLEXI reads it aloud),
+// then Next/Done. The scene starts from `sceneSaved` and reports changes to
+// `onSceneChange` (both null for a pushed task).
+function showNoAnswerStep(step, progress, btnLabel, sceneSaved, onSceneChange) {
+  const type   = step.activityType;
+  const prefix = type === 'scene' ? 'scene' : type === 'face' ? 'face' : 'message';
+  currentActivity = null;
+  hideFeedback();
+  document.getElementById(prefix + 'Progress').textContent = progress;
+  document.getElementById(prefix + 'Title').textContent = step.title || '';
+  document.getElementById(prefix + 'Text').textContent  = step.instruction || '';
+  document.getElementById(prefix + 'Btn').textContent   = btnLabel;
+  if (prefix === 'message') {
+    setPictureSize(step.imageSize);
+    const img = document.getElementById('messageImage');
+    img.style.display = step.image ? '' : 'none';
+    if (step.image) img.src = step.image; else img.removeAttribute('src');
+  }
+  showOnly(prefix + 'Screen');
+  if (type === 'scene') SceneBuilder.open(step, sceneSaved, onSceneChange);
+  if (type === 'face') openFaceMaker();
+  const title = step.title && !/[.!?]$/.test(step.title) ? step.title + '.' : step.title;
+  speakText([title, step.instruction].filter(Boolean).join(' '));
+}
+
+// Done on a single pushed intro/reflection or scene task.
+function finishPushedStep() {
+  document.getElementById('finishedMsg').textContent = 'All done!';
+  showOnly('finishedScreen');
+}
+
+// Preview: show the scene the student has saved so far on this step.
+function mirrorScene() {
+  const step = lesson.steps[lesson.current];
+  if (!step || step.activityType !== 'scene') return;
+  const r = lesson.results && lesson.results[lesson.current];
+  SceneBuilder.close();
+  SceneBuilder.open(step, r && r.scene, null);
 }
 
 // Move to the next step, or finish after the last one.
@@ -192,7 +213,7 @@ function advanceLesson() {
 }
 
 function onMessageNext() {
-  if (!lesson) return;
+  if (!lesson) return finishPushedStep();
   lessonRef('results/' + lesson.current).set({ done: true, completedAt: Date.now() });
   advanceLesson();
 }
@@ -202,6 +223,7 @@ function onMessageNext() {
 // FLEXI's face, remember the face FLEXI had (once per lesson) so it can be
 // put back afterwards.
 function openFaceMaker() {
+  if (PREVIEW) return;  // the preview's face screen shows the face live
   const frame = document.getElementById('faceEditorFrame');
   const url = `face-maker.html?robot=${currentRobotId}&key=${lesson.startedAt}-${lesson.current}`;
   if (frame.getAttribute('src') === url) return;
@@ -217,7 +239,7 @@ function openFaceMaker() {
 // ticked "keep the student's face". The teacher's page does the same when
 // the lesson is restarted or ended early.
 function restoreFaceAfterLesson() {
-  if (!lesson || lesson.faceBefore === undefined || lesson.faceRestored) return;
+  if (PREVIEW || !lesson || lesson.faceBefore === undefined || lesson.faceRestored) return;
   lessonRef('faceRestored').set(true);
   if (lesson.steps.some(s => s.activityType === 'face' && s.keepFace)) return;
   firebase.database().ref(`/robots/${currentRobotId}/flexi/customFace`)
@@ -226,7 +248,7 @@ function restoreFaceAfterLesson() {
 
 // Leaving the scene step: keep the finished scene with the step's result.
 function onSceneNext() {
-  if (!lesson) return;
+  if (!lesson) return finishPushedStep();
   lessonRef('results/' + lesson.current).update({
     done: true, completedAt: Date.now(), scene: SceneBuilder.getState(),
   });
@@ -931,7 +953,7 @@ let speakTimer = null;
 let lastSpoken = { text: '', at: 0 };
 
 function speakText(text) {
-  if (!('speechSynthesis' in window) || !text) return;
+  if (PREVIEW || !('speechSynthesis' in window) || !text) return;
   if (text === lastSpoken.text && Date.now() - lastSpoken.at < 2000) return;
   lastSpoken = { text, at: Date.now() };
 

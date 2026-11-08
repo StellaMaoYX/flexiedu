@@ -215,6 +215,26 @@
     /* ── Right panel ── */
     .right-col { display: flex; flex-direction: column; gap: 14px; }
 
+    /* Live preview of the student screen: the page is laid out at the robot
+       tablet's size and scaled down to fit (see fitStudentPreview). */
+    .student-preview {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 2;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 2px solid #d6e2f5;
+      background: #eef2ff;
+    }
+    .student-preview iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1200px; height: 800px;
+      border: 0;
+      transform-origin: 0 0;
+      pointer-events: none;
+    }
+
     /* ── Robot status ── */
     .robot-status-row {
       display: flex;
@@ -665,11 +685,10 @@
             <span class="status-dot dot-off" id="statusDot"></span>
             <span id="statusText">Robot not connected</span>
           </div>
-          <p class="hint-note" style="margin-bottom:8px;">Open the student screen on the student device:</p>
-          <a id="studentLink" href="#" target="_blank"
-             style="display:block;padding:8px;background:#eef4ff;border-radius:8px;font-size:0.85rem;color:#1a56a0;text-decoration:none;word-break:break-all;">
-            Loading student screen link…
-          </a>
+          <p class="hint-note" style="margin-bottom:8px;">Student screen right now (live preview):</p>
+          <div class="student-preview" id="studentPreview">
+            <iframe id="studentPreviewFrame" title="Student screen preview" tabindex="-1"></iframe>
+          </div>
         </div>
       </div>
 

@@ -19,6 +19,8 @@
   // from Robot Tools) only act as kiosk screens inside the belly.
   var frameOnly = document.currentScript && document.currentScript.hasAttribute('data-frame-only');
   if (frameOnly && isTopPage) return;
+  // The teacher page's live preview (?preview=1) is not a kiosk screen.
+  if (new URLSearchParams(window.location.search).get('preview') === '1') return;
 
   // ── No zoom, selection, long-press menus or pull-to-refresh ──────────────
   var style = document.createElement('style');
