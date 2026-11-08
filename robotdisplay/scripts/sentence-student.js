@@ -17,9 +17,9 @@
  * face maker, then Next). Missing/legacy
  * activityType is treated as 'ordering'. With neither, the welcome screen shows.
  *
- * ?preview=1 – the live preview on the teacher's class page: it only
- * watches (no speech, no taps, no Firebase writes, no face maker) and mirrors
- * the student's scene as it is saved.
+ * #preview – the preview on the teacher's class page: shows the task the
+ * teacher is editing (sent by postMessage, see initPreview), as the student
+ * would see it. No Firebase, speech, taps or face maker.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Shared state ─────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ let lesson            = null;  // /flexi/lesson while one is running or finished
 let renderedStepKey   = null;  // "<current>:<stepStartedAt>" of the step on screen
 let lastPushed        = null;  // last single pushed task, shown when no lesson
 let advancing         = false;
-const PREVIEW = new URLSearchParams(window.location.search).get('preview') === '1';
+const PREVIEW = window.location.hash === '#preview';
 
 // Ordering state
 let slots = [];   // array of N: null or item object
@@ -55,8 +55,7 @@ const STUCK_PHRASE = "Uh-oh, I'm stuck. Let's try that again!";
 // ── Initialization ─────────────────────────────────────────────────────────
 function initStudent() {
   currentRobotId = Number(new URLSearchParams(window.location.search).get('robot') || 0);
-  if (PREVIEW) document.body.classList.add('preview');
-  else RobotVoice.watch(currentRobotId, 'belly');
+  RobotVoice.watch(currentRobotId, 'belly');
 
   firebase.database()
     .ref(`/robots/${currentRobotId}/flexi/pushed`)
@@ -130,10 +129,7 @@ function onLessonChanged(data) {
 
   // Result/attempt writes also change the lesson; only re-render on a new step.
   const key = lesson.status + ':' + lesson.current + ':' + lesson.stepStartedAt;
-  if (key === renderedStepKey) {
-    if (PREVIEW) mirrorScene();
-    return;
-  }
+  if (key === renderedStepKey) return;
   renderedStepKey = key;
   hideFeedback();
 
@@ -193,15 +189,6 @@ function finishPushedStep() {
   showOnly('finishedScreen');
 }
 
-// Preview: show the scene the student has saved so far on this step.
-function mirrorScene() {
-  const step = lesson.steps[lesson.current];
-  if (!step || step.activityType !== 'scene') return;
-  const r = lesson.results && lesson.results[lesson.current];
-  SceneBuilder.close();
-  SceneBuilder.open(step, r && r.scene, null);
-}
-
 // Move to the next step, or finish after the last one.
 function advanceLesson() {
   if (!lesson || advancing) return;
@@ -223,7 +210,7 @@ function onMessageNext() {
 // FLEXI's face, remember the face FLEXI had (once per lesson) so it can be
 // put back afterwards.
 function openFaceMaker() {
-  if (PREVIEW) return;  // the preview's face screen shows the face live
+  if (PREVIEW) return;  // the teacher page preview only shows the step's text
   const frame = document.getElementById('faceEditorFrame');
   const url = `face-maker.html?robot=${currentRobotId}&key=${lesson.startedAt}-${lesson.current}`;
   if (frame.getAttribute('src') === url) return;
@@ -994,8 +981,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Teacher page preview ───────────────────────────────────────────────────
+// The class page sends the task being edited ({type:'flexi-preview', task});
+// show it the way the student screen would. Asks for it once ready.
+function initPreview() {
+  document.body.classList.add('preview');
+  window.addEventListener('message', ev => {
+    if (ev.origin !== window.location.origin || !ev.data || ev.data.type !== 'flexi-preview') return;
+    showPreviewTask(ev.data.task);
+  });
+  window.parent.postMessage({ type: 'flexi-preview-ready' }, window.location.origin);
+}
+
+function showPreviewTask(task) {
+  hideFeedback();
+  showOnly('waitingScreen');  // stays if the task has nothing to show yet
+  if (!task) return;
+  const type = task.activityType;
+  if (type === 'face') showNoAnswerStep(task, '', 'Done ✓', null, null);
+  else renderActivity(task);
+}
+
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  if (PREVIEW) return initPreview();
   if (typeof Config !== 'undefined' && typeof Database !== 'undefined') {
     try {
       new Database(new Config().config, initStudent);

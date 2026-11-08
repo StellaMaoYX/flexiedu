@@ -340,6 +340,7 @@ function skipToNext() {
 }
 
 function showEmptyEditorState() {
+  updateStudentPreview();
   document.getElementById('editorCardBody').style.display = 'none';
   document.getElementById('editorEmptyState').style.display = 'block';
 }
@@ -365,6 +366,7 @@ function updatePictureSizeButtons() {
 
 // ── Editor: load / save the selected task ───────────────────────────────────
 function loadTaskIntoEditor(i) {
+  updateStudentPreview();
   const task = tasks[i];
   if (!task) { showEmptyEditorState(); return; }
   hideEmptyEditorState();
@@ -436,6 +438,7 @@ function loadTaskIntoEditor(i) {
 }
 
 function saveCurrentTask() {
+  updateStudentPreview();
   const task = tasks[activeIndex];
   if (!task) return;
   task.title         = document.getElementById('edTitle').value.trim()   || 'Untitled Task';
@@ -1189,17 +1192,40 @@ function pushToStudent() {
   }
 }
 
-// ── Live preview of the student screen ────────────────────────────────────
-// The belly page in its look-only mode (?preview=1: no speech, taps or
-// writes), laid out at the tablet's size and scaled to the card's width.
+// ── Preview of the selected task on the student screen ────────────────────
+// The student page in its look-only mode (#preview: no Firebase, speech or
+// taps), laid out at the tablet's size and scaled to the card's width. It
+// shows the task in the editor as it is now, without pushing it anywhere.
+let previewTimer = null;
+
 function initStudentPreview() {
   const box   = document.getElementById('studentPreview');
   const frame = document.getElementById('studentPreviewFrame');
-  frame.src = `../robotdisplay/sentence-student.html?robot=${currentRobotId}&preview=1`;
+  frame.src = '../robotdisplay/sentence-student.html#preview';
   const fit = () => { frame.style.transform = `scale(${box.clientWidth / 1200})`; };
   fit();
   if (window.ResizeObserver) new ResizeObserver(fit).observe(box);
   else window.addEventListener('resize', fit);
+
+  window.addEventListener('message', ev => {
+    if (ev.origin === window.location.origin && ev.data && ev.data.type === 'flexi-preview-ready') sendPreview();
+  });
+  // Any edit in the task editor updates the preview.
+  const editor = document.getElementById('editorCard');
+  ['input', 'change', 'click'].forEach(t => editor.addEventListener(t, updateStudentPreview));
+}
+
+function updateStudentPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(sendPreview, 300);
+}
+
+function sendPreview() {
+  const frame = document.getElementById('studentPreviewFrame');
+  if (!frame || !frame.contentWindow) return;
+  const editing = document.getElementById('editorCardBody').style.display !== 'none';
+  const task = editing ? readTask() : null;
+  frame.contentWindow.postMessage({ type: 'flexi-preview', task }, window.location.origin);
 }
 
 function showPushStatus(msg, type) {

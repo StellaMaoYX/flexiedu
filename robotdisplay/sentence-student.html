@@ -36,12 +36,20 @@
       flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; text-align: center; padding: 32px 20px;
     }
+    /* The card grows with its picture; title and text keep the same width
+       whatever the picture size. */
     .message-card {
-      background: white; border-radius: 24px; padding: 32px 36px; max-width: 640px; width: 100%;
+      background: white; border-radius: 24px; padding: 32px 36px;
+      width: fit-content; min-width: min(640px, 94vw); max-width: 94vw;
       box-shadow: 0 6px 30px rgba(26,86,160,.12);
     }
+    .message-title, .message-text { max-width: 568px; margin-left: auto; margin-right: auto; }
     .message-title { font-size: 2rem; font-weight: bold; color: #222; margin-bottom: 16px; }
-    .message-image { max-width: 100%; max-height: 40vh; border-radius: 16px; margin-bottom: 16px; }
+    .message-image {
+      display: block; margin: 0 auto 16px;
+      height: 30vh; width: auto; max-width: 100%; object-fit: contain; border-radius: 16px;
+      max-height: calc(100vh - 380px);  /* leave room for title, text and the button */
+    }
     .message-text  { font-size: 1.5rem; line-height: 1.5; color: #333; margin-bottom: 28px; white-space: pre-wrap; }
     .lesson-progress { font-size: 0.95rem; color: #6b7a99; font-weight: bold; margin-bottom: 10px; }
     .lesson-progress:empty { display: none; }
@@ -223,7 +231,7 @@
     .slot-img {
       width: 48px;
       height: 48px;
-      object-fit: cover;
+      object-fit: contain;
       border-radius: 8px;
     }
     .slot-speak {
@@ -295,7 +303,7 @@
     .bubble-img {
       width: 38px;
       height: 38px;
-      object-fit: cover;
+      object-fit: contain;
       border-radius: 6px;
     }
     .bubble-speak {
@@ -422,7 +430,7 @@
       align-items: center;
       gap: 4px;
     }
-    .sort-bin-label img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }
+    .sort-bin-label img { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; }
     .sort-bin-items { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 40px; }
     .sort-chip {
       display: flex;
@@ -438,12 +446,16 @@
       cursor: pointer;
       user-select: none;
     }
-    .sort-chip img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; }
+    .sort-chip img { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
 
     /* ── Multiple choice screen ── */
     .mc-question { max-width: 700px; margin: 0 auto 18px; padding: 0 16px; text-align: center; }
     .mc-question-text { font-size: 1.3rem; color: #333; margin-bottom: 8px; }
-    .mc-question img { max-width: 220px; max-height: 220px; object-fit: cover; border-radius: 12px; margin-top: 8px; }
+    .mc-question img {
+      display: block; height: 200px; width: auto; max-width: 92vw; object-fit: contain;
+      border-radius: 12px; margin-top: 8px;
+      position: relative; left: 50%; transform: translateX(-50%);
+    }
     .mc-options { max-width: 700px; margin: 0 auto; padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
     .mc-option {
       display: flex;
@@ -461,7 +473,7 @@
     }
     .mc-option:hover { border-color: #9dbcf5; background: #f7f9ff; }
     .mc-option.selected { border-color: #1a56a0; background: #eef4ff; }
-    .mc-option img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+    .mc-option img { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; }
 
     /* ── Picture size the teacher picked for the task (body[data-pictures]) ── */
     body[data-pictures="large"] .slot-img,
@@ -469,23 +481,16 @@
     body[data-pictures="large"] .sort-chip img       { width: 72px;  height: 72px;  border-radius: 10px; }
     body[data-pictures="large"] .sort-bin-label img  { width: 88px;  height: 88px;  border-radius: 12px; }
     body[data-pictures="large"] .mc-option img       { width: 110px; height: 110px; border-radius: 12px; }
-    body[data-pictures="large"] .mc-question img     { max-width: 420px; max-height: 38vh; }
-    body[data-pictures="large"] .message-image       { max-height: 50vh; }
+    body[data-pictures="large"] .mc-question img     { height: 32vh; }
+    body[data-pictures="large"] .message-image       { height: 42vh; }
 
     body[data-pictures="xlarge"] .slot-img,
     body[data-pictures="xlarge"] .bubble-img         { width: 160px; height: 160px; border-radius: 16px; }
     body[data-pictures="xlarge"] .sort-chip img      { width: 120px; height: 120px; border-radius: 14px; }
     body[data-pictures="xlarge"] .sort-bin-label img { width: 130px; height: 130px; border-radius: 16px; }
     body[data-pictures="xlarge"] .mc-option img      { width: 170px; height: 170px; border-radius: 16px; }
-    body[data-pictures="xlarge"] .mc-question img    { max-width: 92%; max-height: 52vh; object-fit: contain; }
-    body[data-pictures="xlarge"] .message-image      { max-height: 64vh; }
-    body[data-pictures="xlarge"] .message-card       { max-width: 960px; }
-    body[data-pictures="xlarge"] .answer-zone,
-    body[data-pictures="xlarge"] .word-bank,
-    body[data-pictures="xlarge"] .sort-bins          { max-width: 1300px; }
-    body[data-pictures="xlarge"] .sort-bin           { max-width: 440px; }
-    body[data-pictures="xlarge"] .mc-question,
-    body[data-pictures="xlarge"] .mc-options         { max-width: 1100px; }
+    body[data-pictures="xlarge"] .mc-question img    { height: 48vh; }
+    body[data-pictures="xlarge"] .message-image      { height: 56vh; }
     .mc-check {
       width: 24px; height: 24px;
       border: 2px solid #9dbcf5;
