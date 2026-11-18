@@ -132,7 +132,7 @@ function onSignedIn(user) {
     } else {
       checkTeacherRole(email);
     }
-  });
+  }).catch(showLookupError);
 }
 
 function setLaunchButtonsEnabled(enabled) {
@@ -216,15 +216,32 @@ function checkTeacherRole(email) {
       setLaunchButtonsEnabled(true);
       followNextPage();
     } else {
-      setRobotIdStatus('unknown');
+      setRobotIdStatus('unknown', null, email);
       setLaunchButtonsEnabled(false);
     }
+  }).catch(function(err) {
+    showLookupError(err);
   });
+}
+
+// A failed read used to leave the buttons gray with no hint why.
+function showLookupError(err) {
+  console.error('FLEXI account lookup failed:', err);
+  setRobotIdStatus('error', null, err && (err.code || err.message));
+  setLaunchButtonsEnabled(false);
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
 }
 
 // ── Robot ID card states ─────────────────────────────────────────────────────
 
-function setRobotIdStatus(state, robotId) {
+// For 'unknown', detail is the email that was looked up; for 'error', the
+// error code. Showing them lets a teacher's screenshot explain the problem.
+function setRobotIdStatus(state, robotId, detail) {
   var el = document.getElementById('robotIdStatus');
   if (!el) return;
 
@@ -234,8 +251,14 @@ function setRobotIdStatus(state, robotId) {
     el.innerHTML = '<span>🛡️</span><span style="font-weight:600;color:#6d28d9;">Administrator</span>';
   } else if (state === 'teacher') {
     el.innerHTML = '<span>🤖</span><span style="font-weight:700;font-size:1.1rem;color:#1a1a2e;">Robot ' + robotId + '</span>';
+  } else if (state === 'error') {
+    el.innerHTML = '<span>⚠️</span><span style="color:#991b1b;">Couldn\'t check your account'
+      + (detail ? ' (' + escapeHtml(detail) + ')' : '')
+      + '. Refresh the page; if it keeps happening, contact an admin.</span>';
   } else {
-    el.innerHTML = '<span>❓</span><span style="color:#991b1b;">No robot assigned — contact an admin</span>';
+    el.innerHTML = '<span>❓</span><span style="color:#991b1b;">No robot assigned to <strong>'
+      + escapeHtml(detail || 'this account')
+      + '</strong> — ask an admin to assign a robot to this exact email</span>';
   }
 }
 
